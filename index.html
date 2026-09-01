@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peta Opportunity Kuta, Bali — CBN Sales Tracker (Google Sheets)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#152030; --panel2:#1b2838; --border:#2a3a4d;
+    --text:#e8eef5; --muted:#8fa3b8; --accent:#22c1a3;
+    --small:#22c55e; --medium:#f59e0b; --high:#ef4444;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  #app{display:flex;height:100vh;width:100vw;}
+  #sidebar{width:340px;min-width:270px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+  #sidebar-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);}
+  #sidebar-header h1{font-size:15.5px;margin:0 0 4px;font-weight:700;letter-spacing:.2px;}
+  #sidebar-header p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.4;}
+  #user-badge{display:flex;align-items:center;gap:8px;font-size:11px;margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;}
+  #user-badge .role-pill{font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:10px;text-transform:uppercase;}
+  #user-badge .role-pill.cam{background:#3b82f622;color:#3b82f6;}
+  #user-badge .role-pill.admin{background:#ef444422;color:#ef4444;}
+  #user-name{flex:1;font-weight:600;}
+  #logout-btn{background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline;}
+  #logout-btn:hover{color:var(--text);}
+  #change-password-btn{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0 2px;}
+  #change-password-btn:hover{color:var(--accent);}
+  #conn-status{display:flex;align-items:center;gap:6px;font-size:10.5px;margin-top:8px;color:var(--muted);}
+  #conn-dot{width:7px;height:7px;border-radius:50%;background:#666;flex-shrink:0;}
+  #conn-dot.ok{background:var(--accent);}
+  #conn-dot.err{background:#ef4444;}
+  #btn-row{display:flex;gap:6px;margin-top:12px;}
+  #add-btn,#route-btn{flex:1;padding:9px 4px;border:none;border-radius:9px;background:var(--accent);color:#0b1420;font-weight:700;font-size:12px;cursor:pointer;transition:opacity .15s;}
+  #add-btn:hover,#route-btn:hover{opacity:.88;}
+  #add-btn.active{background:#ef4444;color:#fff;}
+  #route-btn{background:#3b82f6;color:#fff;}
+  #route-btn.active{background:#ef4444;}
+  #refresh-btn{padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--panel2);color:var(--text);font-size:13px;cursor:pointer;}
+  #refresh-btn:hover{background:#22334a;}
+  #refresh-btn.spinning{animation:spin 0.8s linear;}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+  #search{width:100%;padding:9px 12px;margin-top:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;outline:none;}
+  #geo-search-wrap{position:relative;margin-top:10px;}
+  #geo-search{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;outline:none;}
+  #geo-search:focus{border-color:var(--accent);}
+  #geo-results{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:1200;background:var(--panel);border:1px solid var(--border);border-radius:9px;max-height:260px;overflow-y:auto;display:none;box-shadow:0 6px 18px rgba(0,0,0,.5);}
+  .geo-result-item{padding:9px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);line-height:1.4;}
+  .geo-result-item:last-child{border-bottom:none;}
+  .geo-result-item:hover{background:var(--panel2);}
+  .geo-result-item b{color:var(--text);font-size:12.5px;}
+  .geo-result-item span{display:block;color:var(--muted);font-size:10.5px;margin-top:2px;}
+  .geo-loading{padding:10px 12px;font-size:11.5px;color:var(--muted);}
+  #export-btn{width:100%;margin-top:8px;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:700;font-size:12.5px;cursor:pointer;}
+  #export-btn:hover{background:#22334a;border-color:var(--accent);}
+  #search:focus{border-color:var(--accent);}
+  #filters{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px;}
+  .tier-filter-row,.team-filter-row{display:flex;gap:6px;}
+  .tier-chip,.team-chip{flex:1;text-align:center;font-size:11px;font-weight:700;padding:6px 4px;border-radius:7px;cursor:pointer;border:1.5px solid transparent;opacity:.45;user-select:none;transition:all .15s;}
+  .tier-chip.on,.team-chip.on{opacity:1;border-color:currentColor;}
+  .cam-filter-select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:12px;margin-top:2px;}
+  #route-section{padding:12px 18px;border-bottom:1px solid var(--border);}
+  #route-list{max-height:130px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+  .route-item{display:flex;align-items:center;gap:8px;font-size:11.5px;background:var(--panel2);border-radius:7px;padding:6px 8px;cursor:pointer;}
+  .route-item .route-line-dot{width:16px;height:4px;border-radius:2px;flex-shrink:0;}
+  .route-item .route-name{flex:1;}
+  .route-item .route-del{color:#ef4444;font-weight:700;cursor:pointer;flex-shrink:0;}
+  .route-empty{font-size:11px;color:var(--muted);margin-top:8px;}
+  #list{flex:1;overflow-y:auto;padding:6px 10px 16px;}
+  .item{padding:10px 10px;border-radius:9px;cursor:pointer;margin-bottom:6px;border:1px solid var(--border);transition:background .15s;background:var(--panel2);}
+  .item:hover{background:#22334a;}
+  .item-top{display:flex;align-items:center;gap:8px;}
+  .tier-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+  .item-name{font-size:13px;font-weight:700;flex:1;}
+  .item-revenue{font-size:12px;font-weight:700;color:var(--accent);margin-top:4px;padding-left:19px;}
+  .item-cams{font-size:10.5px;color:var(--muted);margin-top:3px;padding-left:19px;}
+  .item-pic{font-size:10.5px;color:var(--muted);margin-top:2px;padding-left:19px;}
+  .item.hidden{display:none;}
+  .empty-state{padding:30px 14px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.6;}
+  #map{flex:1;height:100%;cursor:default;}
+  #map.dark-mode{filter:invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);}
+  #map.adding,#map.routing{cursor:crosshair;}
+  #map.dark-mode .leaflet-popup, #map.dark-mode .leaflet-control{filter:invert(1) hue-rotate(180deg);}
+  #map-style-toggle{position:absolute;top:14px;right:64px;z-index:600;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+  #map-style-toggle:hover{background:var(--panel2);}
+  #locate-btn{position:absolute;top:14px;right:200px;z-index:600;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:8px 11px;border-radius:9px;font-size:14px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+  #locate-btn:hover{background:var(--panel2);}
+  #locate-btn.active{background:var(--accent);color:#0b1420;}
+  #stats-bar{position:absolute;bottom:14px;left:356px;z-index:500;background:rgba(21,32,48,.92);border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-size:11px;color:var(--muted);backdrop-filter:blur(4px);display:flex;gap:14px;}
+  #stats-bar b{color:var(--text);}
+  #add-hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:600;background:#ef4444;color:#fff;padding:8px 18px;border-radius:20px;font-size:12.5px;font-weight:600;display:none;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+  #route-panel{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:600;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:14px;font-size:12.5px;display:none;box-shadow:0 4px 14px rgba(0,0,0,.5);align-items:center;gap:10px;filter:none;}
+  #route-panel span{font-weight:600;}
+  #route-panel button{border:none;border-radius:7px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;}
+  #route-undo{background:var(--panel2);color:var(--text);}
+  #route-finish{background:var(--accent);color:#0b1420;}
+  #route-finish:disabled{opacity:.4;cursor:default;}
+  #route-cancel{background:#ef444422;color:#ef4444;}
+  #toast{position:absolute;top:14px;right:14px;z-index:700;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:10px 16px;border-radius:9px;font-size:12.5px;display:none;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+  .leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border-radius:10px;}
+  .leaflet-popup-tip{background:var(--panel);}
+  .leaflet-popup-content{margin:14px 16px;}
+  .popup-title-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .popup-name{font-size:14.5px;font-weight:700;margin:0;flex:1;}
+  .tier-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0;}
+  .popup-revenue{font-size:16px;font-weight:800;color:var(--accent);margin:4px 0 8px;}
+  .popup-row{font-size:12px;color:#c7d3df;margin:4px 0;line-height:1.4;}
+  .popup-row a{color:var(--accent);text-decoration:none;}
+  .popup-pic-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:6px;}
+  .popup-cams{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}
+  .cam-pill{font-size:10.5px;background:var(--panel2);border:1px solid var(--border);padding:2px 8px;border-radius:14px;}
+  .popup-actions{display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+  .popup-actions button{flex:1;font-size:11.5px;padding:7px;border-radius:7px;border:none;cursor:pointer;font-weight:700;}
+  .btn-edit{background:var(--panel2);color:var(--text);border:1px solid var(--border) !important;}
+  .btn-delete{background:#ef444422;color:#ef4444;}
+  #form-overlay,#route-form-overlay,#login-overlay,#password-overlay,#export-overlay{position:absolute;inset:0;background:rgba(6,10,16,.55);z-index:900;display:none;align-items:center;justify-content:center;}
+  #login-overlay{z-index:2000;background:var(--bg);display:flex;}
+  #form-card,#route-form-card,#login-card,#password-card,#export-card{width:360px;max-width:92vw;max-height:88vh;overflow-y:auto;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;filter:none;}
+  #login-card{text-align:left;}
+  #login-card h2{font-size:17px;margin:0 0 4px;}
+  #login-card p{font-size:12px;color:var(--muted);margin:0 0 18px;}
+  #login-error{color:#ef4444;font-size:12px;margin-top:8px;display:none;}
+  #login-btn{width:100%;margin-top:16px;padding:11px;border-radius:9px;border:none;background:var(--accent);color:#0b1420;font-weight:700;font-size:13.5px;cursor:pointer;}
+  #login-btn:hover{opacity:.9;}
+  #form-card h2,#route-form-card h2{font-size:15px;margin:0 0 14px;}
+  .f-label{font-size:11.5px;color:var(--muted);font-weight:700;margin:12px 0 5px;text-transform:uppercase;letter-spacing:.3px;}
+  .f-input{width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;outline:none;user-select:text;-webkit-user-select:text;}
+  .f-input:focus{border-color:var(--accent);}
+  .f-row2{display:flex;gap:8px;}
+  .f-row2 > div{flex:1;}
+  .tier-picker,.team-picker{display:flex;gap:8px;}
+  .tier-option,.team-option{flex:1;text-align:center;padding:9px 4px;border-radius:8px;border:2px solid var(--border);cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);}
+  .tier-option.selected,.team-option.selected{color:#fff;}
+  .cam-checklist{display:flex;flex-direction:column;gap:6px;max-height:150px;overflow-y:auto;padding:8px;background:var(--panel2);border-radius:8px;border:1px solid var(--border);}
+  .cam-check-row{display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;}
+  .cam-check-row input{accent-color:var(--accent);}
+  .form-actions{display:flex;gap:10px;margin-top:18px;}
+  .form-actions button{flex:1;padding:10px;border-radius:8px;border:none;font-weight:700;font-size:13px;cursor:pointer;}
+  .btn-cancel{background:var(--panel2);color:var(--text);border:1px solid var(--border) !important;}
+  .btn-save{background:var(--accent);color:#0b1420;}
+  .btn-save:disabled{opacity:.5;cursor:default;}
+  #setup-banner{display:none;position:absolute;inset:0;z-index:1000;background:var(--bg);align-items:center;justify-content:center;padding:20px;}
+  #setup-card{max-width:480px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:26px;filter:none;}
+  #setup-card h2{margin:0 0 10px;font-size:16px;}
+  #setup-card p{font-size:13px;color:var(--muted);line-height:1.6;margin:0 0 14px;}
+  #setup-card code{background:var(--panel2);padding:2px 6px;border-radius:5px;font-size:12px;}
+  ::-webkit-scrollbar{width:6px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  #sidebar-handle{display:none;}
+  @media (max-width:720px){
+    #app{flex-direction:column;}
+    #sidebar{
+      position:fixed; left:0; right:0; bottom:0; top:auto; z-index:1000;
+      width:100%; height:auto; max-height:80vh;
+      border-right:none; border-top:1px solid var(--border);
+      border-radius:16px 16px 0 0;
+      transform:translateY(calc(100% - 50px));
+      transition:transform .28s cubic-bezier(.2,.8,.2,1);
+    }
+    #sidebar.expanded{ transform:translateY(0); }
+    #sidebar-handle{
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      padding:8px 0 6px; cursor:pointer; flex-shrink:0; user-select:none;
+    }
+    .handle-bar{width:38px;height:4px;border-radius:3px;background:var(--border);margin-bottom:5px;}
+    #handle-label{font-size:11px;color:var(--muted);font-weight:600;}
+    #map{height:100%;}
+    #stats-bar{display:none;}
+    #add-hint,#route-panel{z-index:1100;top:10px;max-width:92vw;}
+    .f-input,#search,#login-username,#login-password{font-size:16px;} /* cegah auto-zoom iOS */
+    #add-btn,#route-btn,#refresh-btn{min-height:44px;font-size:13px;}
+    .tier-chip,.team-chip{min-height:36px;display:flex;align-items:center;justify-content:center;}
+    #form-card,#route-form-card,#login-card{width:92vw;padding:18px;}
+    .popup-actions button{min-height:40px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="login-overlay">
+  <div id="login-card">
+    <h2>🔒 Login</h2>
+    <p>Peta Opportunity Kuta, Bali — CBN Sales Tracker</p>
+    <div class="f-label" style="margin-top:0;">Pilih Nama</div>
+    <select class="f-input" id="login-username-select"></select>
+    <div class="f-label">Password</div>
+    <input type="password" class="f-input" id="login-password" placeholder="Password" autocomplete="current-password">
+    <div id="login-error"></div>
+    <button id="login-btn">Masuk</button>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-handle">
+      <div class="handle-bar"></div>
+      <span id="handle-label">▲ Tampilkan Panel</span>
+    </div>
+    <div id="sidebar-header">
+      <h1>Peta Opportunity, Bali</h1>
+      <p>Data CAM Bali.</p>
+      <div id="user-badge">
+        <span id="user-name">-</span>
+        <span class="role-pill" id="user-role-pill">-</span>
+        <button id="change-password-btn" title="Ganti Password">🔑</button>
+        <button id="logout-btn">Keluar</button>
+      </div>
+      <div id="conn-status"><span id="conn-dot"></span><span id="conn-text">Menghubungkan...</span></div>
+      <div id="geo-search-wrap">
+        <input type="text" id="geo-search" placeholder="🔍 Cari nama tempat atau paste koordinat...">
+        <div id="geo-results"></div>
+      </div>
+      <div id="btn-row">
+        <button id="add-btn">+ Titik</button>
+        <button id="route-btn">🛣️ Jalan</button>
+        <button id="refresh-btn" title="Refresh data">🔄</button>
+      </div>
+      <input type="text" id="search" placeholder="Cari nama hotel/villa...">
+      <button id="export-btn">📊 Export Excel</button>
+    </div>
+    <div id="filters">
+      <div>
+        <div class="f-label" style="margin-top:0;">Filter Tier</div>
+        <div class="tier-filter-row" id="tier-filter"></div>
+      </div>
+      <div>
+        <div class="f-label">Filter CAM</div>
+        <select class="cam-filter-select" id="cam-filter"><option value="">Semua CAM</option></select>
+      </div>
+    </div>
+    <div id="route-section">
+      <div class="f-label" style="margin-top:0;">Filter Tim Canvassing</div>
+      <div class="team-filter-row" id="team-filter"></div>
+      <div id="route-list"></div>
+    </div>
+    <div id="list"></div>
+  </div>
+  <div id="map" class="dark-mode"></div>
+  <button id="map-style-toggle" title="Ganti gaya peta">🟢 Warna Asli</button>
+  <button id="locate-btn" title="Lokasi saya saat ini">📍</button>
+  <div id="add-hint">🎯 Klik lokasi di peta untuk menempatkan titik</div>
+  <div id="route-panel">
+    <span id="route-panel-text">Klik titik-titik jalan yang sudah divisit</span>
+    <button id="route-undo">↩ Undo</button>
+    <button id="route-finish" disabled>✓ Selesai</button>
+    <button id="route-cancel">✕ Batal</button>
+  </div>
+  <div id="toast"></div>
+</div>
+<div id="stats-bar">
+  <span><b id="stat-count">0</b> titik</span>
+  <span>Total potensi: <b id="stat-revenue">Rp 0</b></span>
+</div>
+
+<div id="form-overlay">
+  <div id="form-card">
+    <h2 id="form-title">Tambah Titik Opportunity</h2>
+    <div class="f-label" style="margin-top:0;">Nama Hotel / Villa / Perusahaan</div>
+    <input type="text" class="f-input" id="f-name" placeholder="cth: Villa Sari Legian">
+
+    <div class="f-label">Nama PIC</div>
+    <input type="text" class="f-input" id="f-pic" placeholder="cth: Made Sudiarta">
+    <div class="f-row2">
+      <div>
+        <div class="f-label">No HP PIC</div>
+        <input type="text" class="f-input" id="f-pic-phone" placeholder="cth: 081234567890" inputmode="tel">
+      </div>
+      <div>
+        <div class="f-label">Jabatan PIC</div>
+        <input type="text" class="f-input" id="f-pic-position" placeholder="cth: GM / Owner">
+      </div>
+    </div>
+    <div class="f-row2">
+      <div>
+        <div class="f-label">Gender PIC</div>
+        <select class="f-input" id="f-gender">
+          <option value="">-- Pilih --</option>
+          <option value="Laki-laki">Laki-laki</option>
+          <option value="Perempuan">Perempuan</option>
+        </select>
+      </div>
+      <div>
+        <div class="f-label">Email PIC</div>
+        <input type="email" class="f-input" id="f-email" placeholder="cth: nama@hotel.com">
+      </div>
+    </div>
+
+    <div class="f-label">Industry</div>
+    <select class="f-input" id="f-industry">
+      <option value="">-- Pilih --</option>
+      <option value="Hospitality">Hospitality (Hotel/Resort)</option>
+      <option value="Villa">Villa</option>
+      <option value="Education">Education</option>
+      <option value="Healthcare">Healthcare</option>
+      <option value="Corporate/Office">Corporate/Office</option>
+      <option value="Internet Providers & Telecommunications">Internet Providers & Telecommunications</option>
+      <option value="Government">Government</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <div class="f-label">Potensi Revenue (Rp)</div>
+    <input type="text" class="f-input" id="f-revenue" placeholder="cth: 150000000" inputmode="numeric">
+    <div class="f-label">Tier Opportunity</div>
+    <div class="tier-picker" id="tier-picker"></div>
+
+    <div class="f-label">Alamat</div>
+    <input type="text" class="f-input" id="f-address" placeholder="cth: Jl. Pandawa No.3, Legian">
+    <div class="f-row2">
+      <div>
+        <div class="f-label">Provinsi</div>
+        <input type="text" class="f-input" id="f-provinsi" placeholder="cth: Bali">
+      </div>
+      <div>
+        <div class="f-label">Kota / Kabupaten</div>
+        <input type="text" class="f-input" id="f-kota" placeholder="cth: Badung">
+      </div>
+    </div>
+    <div class="f-label">Zip Code</div>
+    <input type="text" class="f-input" id="f-zipcode" placeholder="cth: 80361" inputmode="numeric">
+
+    <div class="f-label">📷 Foto Evidence (opsional)</div>
+    <input type="file" class="f-input" id="f-photo" accept="image/*" capture="environment">
+    <div id="f-photo-preview" style="margin-top:8px;"></div>
+
+    <div class="form-actions">
+      <button class="btn-cancel" id="f-cancel">Batal</button>
+      <button class="btn-save" id="f-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div id="route-form-overlay">
+  <div id="route-form-card">
+    <h2>Tandai Jalur Canvassing</h2>
+    <div class="f-label" style="margin-top:0;">Tim yang Canvassing</div>
+    <div class="team-picker" id="team-picker"></div>
+    <div class="f-label">Nama Jalan / Catatan (opsional)</div>
+    <input type="text" class="f-input" id="r-note" placeholder="cth: Jl. Pantai Kuta sisi barat">
+    <div class="form-actions">
+      <button class="btn-cancel" id="r-cancel">Batal</button>
+      <button class="btn-save" id="r-save">Simpan Jalur</button>
+    </div>
+  </div>
+</div>
+
+<div id="password-overlay">
+  <div id="password-card">
+    <h2>🔑 Ganti Password</h2>
+    <div class="f-label" style="margin-top:0;">Password Lama</div>
+    <input type="password" class="f-input" id="pw-old">
+    <div class="f-label">Password Baru</div>
+    <input type="password" class="f-input" id="pw-new" placeholder="Minimal 4 karakter">
+    <div class="f-label">Konfirmasi Password Baru</div>
+    <input type="password" class="f-input" id="pw-confirm">
+    <div id="pw-error" style="color:#ef4444;font-size:12px;margin-top:8px;display:none;"></div>
+    <div class="form-actions">
+      <button class="btn-cancel" id="pw-cancel">Batal</button>
+      <button class="btn-save" id="pw-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div id="export-overlay">
+  <div id="export-card">
+    <h2>📊 Export ke Excel</h2>
+    <div class="f-label" style="margin-top:0;">Dari Tanggal</div>
+    <input type="date" class="f-input" id="export-from">
+    <div class="f-label">Sampai Tanggal</div>
+    <input type="date" class="f-input" id="export-to">
+    <div class="f-label">Filter CAM (opsional)</div>
+    <select class="f-input" id="export-cam-filter"><option value="">Semua CAM</option></select>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5;">
+      Berdasarkan tanggal titik pertama kali dibuat. Kosongkan salah satu kolom tanggal untuk tidak membatasi dari/sampai sisi itu.
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" id="export-cancel">Batal</button>
+      <button class="btn-save" id="export-confirm">⬇ Download Excel</button>
+    </div>
+  </div>
+</div>
+
+<div id="setup-banner">
+  <div id="setup-card">
+    <h2>⚙️ Belum dikonfigurasi</h2>
+    <p>File ini belum tersambung ke Google Sheets. Buka file HTML ini dengan text editor, cari baris:</p>
+    <p><code>const SHEET_API_URL = "PASTE_URL_WEB_APP_DI_SINI";</code></p>
+    <p>Ganti dengan URL Web App hasil deploy Apps Script (diakhiri <code>/exec</code>), simpan file, lalu buka lagi.</p>
+  </div>
+</div>
+
+<script>
+// =========================================================================
+// KONFIGURASI
+// =========================================================================
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycby1JWNDMj2CvbkLFL0Vox_Oa8FoZNNeZKKRQXR4TvcMgOjpnhA36odlKDOunJVx7iX9Nw/exec";
+const AUTO_REFRESH_SECONDS = 20;
+
+// ============== USER & ROLE ==============
+// Password TIDAK disimpan di sini — dicek server-side lewat sheet "password"
+// yang di-protect, supaya tidak kelihatan siapa pun yang buka View Source file ini.
+const loginUsers = [
+  { username: 'gezy',      name: 'Gezy Natalia — Team Leader',      role: 'admin' },
+  { username: 'jacksen',   name: 'Jacksen Wijaya — Branch Manager', role: 'admin' },
+  { username: 'bagus',     name: 'I Komang Bagus Tribawa',          role: 'cam' },
+  { username: 'ashari',    name: 'Ashari Widodo',                   role: 'cam' },
+  { username: 'christine', name: 'Christine Maretha Cindy Pardede', role: 'cam' },
+  { username: 'debora',    name: 'Debora Sitorus',                  role: 'cam' },
+  { username: 'mikha',     name: 'I Putu Mikha Delvi Aditya',       role: 'cam' },
+  { username: 'nurul',     name: 'Nurul Mubin',                     role: 'cam' },
+  { username: 'nyoman',    name: 'Nyoman Suadnyana Yasa',           role: 'cam' },
+  { username: 'teguh',     name: 'I PT Teguh Suryadinatha Putra',   role: 'cam' },
+];
+let currentUser = null; // {username, name, role} — diisi setelah login sukses lewat API
+function isAdmin(){ return currentUser && currentUser.role === 'admin'; }
+function getDisplayName(username){
+  const u = loginUsers.find(x => x.username === username);
+  return u ? u.name : (username || '(tidak diketahui)');
+}
+function canEditOp(op){
+  if (!currentUser) return false;
+  if (isAdmin()) return true;
+  return op.createdBy && op.createdBy.toLowerCase() === currentUser.username.toLowerCase();
+}
+
+// ============== TIM CANVASSING (ganti nama/warna sesuai kebutuhan) ==============
+const teamList = [
+  { id: 'tim1', name: 'Tim 1', color: '#3b82f6' }, // biru
+  { id: 'tim2', name: 'Tim 2', color: '#06b6d4' }, // cyan
+  { id: 'tim3', name: 'Tim 3', color: '#a855f7' }, // ungu
+];
+const teamMeta = {};
+teamList.forEach(t => teamMeta[t.id] = t);
+
+const tierMeta = {
+  small:    {label:"Small",  color:"#22c55e"},
+  medium:   {label:"Medium", color:"#f59e0b"},
+  high:     {label:"High",   color:"#ef4444"},
+  existing: {label:"Existing", color:"#334155"},
+};
+
+let opportunities = [];
+let canvassRoutes = [];
+const isConfigured = SHEET_API_URL && SHEET_API_URL.indexOf('PASTE_URL') === -1;
+
+if (!isConfigured) {
+  document.getElementById('setup-banner').style.display = 'flex';
+}
+
+// ============== LOGIN (verifikasi password terjadi di server / Apps Script) ==============
+const loginSelectEl = document.getElementById('login-username-select');
+loginUsers.forEach(u => {
+  const opt = document.createElement('option');
+  opt.value = u.username;
+  opt.textContent = u.name + (u.role === 'admin' ? ' (Administrator)' : '');
+  loginSelectEl.appendChild(opt);
+});
+
+async function apiLogin(username, password){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'login', username, password})});
+  return await res.json();
+}
+async function apiChangePassword(username, oldPassword, newPassword){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'changePassword', username, oldPassword, newPassword})});
+  return await res.json();
+}
+
+async function doLogin(){
+  const username = loginSelectEl.value;
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Memeriksa...';
+  try {
+    const result = await apiLogin(username, password);
+    if (!result.ok) {
+      errEl.textContent = result.error || 'Login gagal.';
+      errEl.style.display = 'block';
+      return;
+    }
+    currentUser = result.user;
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('user-name').textContent = currentUser.name;
+    const pill = document.getElementById('user-role-pill');
+    pill.textContent = isAdmin() ? 'Administrator' : 'CAM';
+    pill.className = 'role-pill ' + (isAdmin() ? 'admin' : 'cam');
+    loadAndRender(false);
+    if (isConfigured) setInterval(() => loadAndRender(false), AUTO_REFRESH_SECONDS * 1000);
+  } catch (err) {
+    errEl.textContent = 'Gagal menghubungi server: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Masuk';
+  }
+}
+document.getElementById('login-btn').addEventListener('click', doLogin);
+document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('logout-btn').addEventListener('click', () => {
+  currentUser = null;
+  location.reload();
+});
+
+// ============== GANTI PASSWORD ==============
+const passwordOverlay = document.getElementById('password-overlay');
+document.getElementById('change-password-btn').addEventListener('click', () => {
+  document.getElementById('pw-old').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+  document.getElementById('pw-error').style.display = 'none';
+  passwordOverlay.style.display = 'flex';
+});
+document.getElementById('pw-cancel').addEventListener('click', () => { passwordOverlay.style.display = 'none'; });
+document.getElementById('pw-save').addEventListener('click', async () => {
+  const oldP = document.getElementById('pw-old').value;
+  const newP = document.getElementById('pw-new').value;
+  const confirmP = document.getElementById('pw-confirm').value;
+  const errEl = document.getElementById('pw-error');
+  errEl.style.display = 'none';
+  if (newP.length < 4) { errEl.textContent = 'Password baru minimal 4 karakter.'; errEl.style.display = 'block'; return; }
+  if (newP !== confirmP) { errEl.textContent = 'Konfirmasi password tidak cocok.'; errEl.style.display = 'block'; return; }
+  const saveBtn = document.getElementById('pw-save');
+  saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
+  try {
+    const result = await apiChangePassword(currentUser.username, oldP, newP);
+    if (!result.ok) { errEl.textContent = result.error || 'Gagal mengubah password.'; errEl.style.display = 'block'; return; }
+    showToast('Password berhasil diubah.');
+    passwordOverlay.style.display = 'none';
+  } catch (err) {
+    errEl.textContent = 'Gagal menghubungi server: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    saveBtn.disabled = false; saveBtn.textContent = 'Simpan';
+  }
+});
+
+// ============== EXPORT KE EXCEL ==============
+const exportOverlay = document.getElementById('export-overlay');
+const exportCamFilterEl = document.getElementById('export-cam-filter');
+loginUsers.forEach(u => {
+  const opt = document.createElement('option');
+  opt.value = u.name; opt.textContent = u.name;
+  exportCamFilterEl.appendChild(opt);
+});
+
+document.getElementById('export-btn').addEventListener('click', () => {
+  const fromInput = document.getElementById('export-from');
+  const toInput = document.getElementById('export-to');
+  // default: dari tanggal titik pertama dibuat, sampai hari ini
+  if (!fromInput.value && opportunities.length) {
+    const dates = opportunities.map(o => o.createdAt).filter(Boolean).map(d => new Date(d));
+    if (dates.length) {
+      const earliest = new Date(Math.min(...dates));
+      fromInput.value = earliest.toISOString().slice(0, 10);
+    }
+  }
+  if (!toInput.value) toInput.value = new Date().toISOString().slice(0, 10);
+  exportOverlay.style.display = 'flex';
+});
+document.getElementById('export-cancel').addEventListener('click', () => { exportOverlay.style.display = 'none'; });
+
+document.getElementById('export-confirm').addEventListener('click', () => {
+  const fromVal = document.getElementById('export-from').value;
+  const toVal = document.getElementById('export-to').value;
+  const camFilterVal = exportCamFilterEl.value;
+  const fromDate = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+  const toDate = toVal ? new Date(toVal + 'T23:59:59') : null;
+
+  const inRange = (createdAt) => {
+    if (!fromDate && !toDate) return true;
+    if (!createdAt) return false; // tidak ada tanggal & user membatasi rentang -> aman dikeluarkan
+    const d = new Date(createdAt);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  };
+
+  const filteredOps = opportunities.filter(op => op.tier !== 'existing' && inRange(op.createdAt) && (!camFilterVal || (op.cams || []).includes(camFilterVal)));
+  const filteredRoutes = canvassRoutes.filter(r => inRange(r.createdAt)); // jalur canvassing tidak difilter per-CAM (biasanya kerja tim)
+
+  if (filteredOps.length === 0 && filteredRoutes.length === 0) {
+    showToast('Tidak ada data pada rentang/filter itu.');
+    return;
+  }
+
+  const opRows = filteredOps.map((op, i) => ({
+    'No': i + 1,
+    'Nama Hotel/Villa': op.name,
+    'PIC': op.pic || '-',
+    'No HP PIC': op.picPhone || '-',
+    'Jabatan PIC': op.picPosition || '-',
+    'Tier': tierMeta[op.tier] ? tierMeta[op.tier].label : op.tier,
+    'Potensi Revenue (Rp)': Number(op.revenue) || 0,
+    'CAM': (op.cams || []).join(', '),
+    'Alamat': op.address || '-',
+    'Dibuat Oleh': getDisplayName(op.createdBy),
+    'Tanggal Dibuat': op.createdAt ? new Date(op.createdAt).toLocaleDateString('id-ID') : '-',
+  }));
+
+  const routeRows = filteredRoutes.map((r, i) => ({
+    'No': i + 1,
+    'Tim': teamMeta[r.team] ? teamMeta[r.team].name : r.team,
+    'Catatan / Nama Jalan': r.note || '-',
+    'Jumlah Titik Koordinat': r.points.length,
+    'Dibuat Oleh': getDisplayName(r.createdBy),
+    'Tanggal Dibuat': r.createdAt ? new Date(r.createdAt).toLocaleDateString('id-ID') : '-',
+  }));
+
+  const wb = XLSX.utils.book_new();
+
+  // ---------- Sheet 1: Neo CRM Format (siap copy-paste ke Neo CRM) ----------
+  const crmRows = filteredOps.map((op) => ({
+    'PIC Name': op.pic || '',
+    'Company Name': op.name || '',
+    'Industry': op.industry || '',
+    'PIC Position': op.picPosition || '',
+    'Gender': op.gender || '',
+    'Mobile Number': op.picPhone || '',
+    'Email': op.email || '',
+    'Longitude Latitude': `${op.lng}, ${op.lat}`,
+    'Provinsi': op.provinsi || '',
+    'Kota / Kabupaten': op.kota || '',
+    'Zip code': op.zipcode || '',
+  }));
+  const wsCrm = XLSX.utils.json_to_sheet(crmRows.length ? crmRows : [{ 'Keterangan': 'Tidak ada titik pada rentang tanggal ini' }]);
+  wsCrm['!cols'] = [{wch:20},{wch:28},{wch:22},{wch:16},{wch:12},{wch:16},{wch:24},{wch:24},{wch:14},{wch:18},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, wsCrm, 'Neo CRM Format');
+
+  // ---------- Sheet 2: Opportunity (detail lengkap untuk analisa internal) ----------
+  const wsOp = XLSX.utils.json_to_sheet(opRows.length ? opRows : [{ 'Keterangan': 'Tidak ada titik opportunity pada rentang tanggal ini' }]);
+  wsOp['!cols'] = [{wch:4},{wch:28},{wch:20},{wch:16},{wch:16},{wch:9},{wch:20},{wch:26},{wch:32},{wch:24},{wch:14}];
+  // format kolom revenue sebagai angka ribuan, tetap numerik untuk dianalisa
+  opRows.forEach((_, i) => {
+    const ref = XLSX.utils.encode_cell({ r: i + 1, c: 6 });
+    if (wsOp[ref]) wsOp[ref].z = '#,##0';
+  });
+  XLSX.utils.book_append_sheet(wb, wsOp, 'Opportunity');
+
+  // ---------- Sheet 3: Jalur Canvassing ----------
+  const wsRoute = XLSX.utils.json_to_sheet(routeRows.length ? routeRows : [{ 'Keterangan': 'Tidak ada jalur canvassing pada rentang tanggal ini' }]);
+  wsRoute['!cols'] = [{wch:4},{wch:10},{wch:32},{wch:20},{wch:24},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsRoute, 'Jalur Canvassing');
+
+  const label = (fromVal || 'awal') + '_sd_' + (toVal || 'sekarang');
+  XLSX.writeFile(wb, `Opportunity_Kuta_Bali_${label}.xlsx`);
+  exportOverlay.style.display = 'none';
+  showToast('File Excel sedang diunduh.');
+});
+
+function fmtRupiah(n){
+  n = Number(n) || 0;
+  return 'Rp ' + n.toLocaleString('id-ID');
+}
+
+function setConnStatus(state, text){
+  const dot = document.getElementById('conn-dot');
+
+  dot.className = state;
+  document.getElementById('conn-text').textContent = text;
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.style.display = 'none', 2500);
+}
+
+// ============== API CALLS ==============
+async function apiList(){
+  const res = await fetch(SHEET_API_URL + '?action=list&username=' + encodeURIComponent(currentUser.username));
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal memuat data');
+  const str = (v) => (v === undefined || v === null) ? '' : String(v);
+  const ops = (json.opportunities || []).map(o => ({
+    ...o,
+    revenue: Number(o.revenue), lat: Number(o.lat), lng: Number(o.lng),
+    // Google Sheets suka otomatis mengubah teks angka-saja (mis. no HP) jadi tipe number —
+    // paksa balik ke string di sini supaya .replace() dkk tidak pernah error.
+    pic: str(o.pic), picPhone: str(o.picPhone), picPosition: str(o.picPosition),
+    address: str(o.address), name: str(o.name), createdBy: str(o.createdBy),
+    industry: str(o.industry), gender: str(o.gender), email: str(o.email),
+    provinsi: str(o.provinsi), kota: str(o.kota), zipcode: str(o.zipcode), photoUrl: str(o.photoUrl),
+  }));
+  const routes = (json.routes || []).map(r => ({...r, points: Array.isArray(r.points) ? r.points : JSON.parse(r.points || '[]')}));
+  return { opportunities: ops, routes };
+}
+async function apiAdd(op){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'add', op, username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal menyimpan');
+}
+async function apiUpdate(op){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'update', op, username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal update');
+}
+async function apiDelete(id){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'delete', id, username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal hapus');
+}
+async function apiAddRoute(route){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addRoute', route, username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal menyimpan jalur');
+}
+async function apiDeleteRoute(id){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'deleteRoute', id, username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal hapus jalur');
+}
+async function apiUploadPhoto(id, base64){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg', username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal upload foto');
+  return json.url;
+}
+
+// ============== MAP INIT (OpenStreetMap, tanpa API key) ==============
+const map = L.map('map', {zoomControl:false}).setView([-8.716, 115.175], 14);
+L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 19
+}).addTo(map);
+
+// ============== TOGGLE GAYA PETA (Warna Asli <-> Gelap/Invert) ==============
+const mapEl2 = document.getElementById('map');
+const styleToggleBtn = document.getElementById('map-style-toggle');
+styleToggleBtn.addEventListener('click', () => {
+  const isDark = mapEl2.classList.toggle('dark-mode');
+  styleToggleBtn.textContent = isDark ? '🟢 Warna Asli' : '🌙 Mode Gelap';
+});
+
+// ============== LOKASI SAYA (GPS) ==============
+let myLocationMarker = null, myLocationCircle = null, watchId = null;
+const locateBtn = document.getElementById('locate-btn');
+locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) { showToast('Browser ini tidak mendukung layanan lokasi.'); return; }
+  if (watchId !== null) {
+    // sudah aktif -> matikan
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    locateBtn.classList.remove('active');
+    if (myLocationMarker) { map.removeLayer(myLocationMarker); myLocationMarker = null; }
+    if (myLocationCircle) { map.removeLayer(myLocationCircle); myLocationCircle = null; }
+    return;
+  }
+  locateBtn.classList.add('active');
+  showToast('Meminta izin akses lokasi...');
+  watchId = navigator.geolocation.watchPosition((pos) => {
+    const { latitude, longitude, accuracy } = pos.coords;
+    if (!myLocationMarker) {
+      myLocationMarker = L.marker([latitude, longitude], {
+        icon: L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="width:16px;height:16px;background:#3b82f6;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 4px #3b82f655, 0 2px 8px rgba(0,0,0,.5);"></div>`,
+          iconSize:[16,16], iconAnchor:[8,8]
+        })
+      }).addTo(map);
+      map.setView([latitude, longitude], 16);
+    } else {
+      myLocationMarker.setLatLng([latitude, longitude]);
+    }
+    if (myLocationCircle) map.removeLayer(myLocationCircle);
+    myLocationCircle = L.circle([latitude, longitude], { radius: accuracy, color:'#3b82f6', weight:1, fillColor:'#3b82f6', fillOpacity:0.12 }).addTo(map);
+  }, (err) => {
+    locateBtn.classList.remove('active');
+    watchId = null;
+    if (err.code === 1) showToast('Izin lokasi ditolak. Aktifkan izin lokasi di pengaturan browser/HP untuk pakai fitur ini.');
+    else showToast('Gagal mendapatkan lokasi: ' + err.message);
+  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+});
+
+// ============== CARI LOKASI (paste koordinat / autocomplete nama tempat) ==============
+const geoSearchInput = document.getElementById('geo-search');
+const geoResultsEl = document.getElementById('geo-results');
+let geoSearchTimeout = null;
+let tempSearchMarker = null;
+
+function parseCoordinatePaste(text){
+  const m = text.trim().match(/^(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+  if (isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function showGeoResults(html){
+  geoResultsEl.innerHTML = html;
+  geoResultsEl.style.display = html ? 'block' : 'none';
+}
+
+function goToLocationAndAddPoint(lat, lng, label, extra){
+  map.flyTo([lat, lng], 17, { duration: 0.6 });
+  if (tempSearchMarker) map.removeLayer(tempSearchMarker);
+  tempSearchMarker = L.marker([lat, lng], {
+    icon: L.divIcon({
+      className: 'custom-marker',
+      html: `<div style="width:18px;height:18px;background:#38bdf8;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid #0f1720;box-shadow:0 2px 8px rgba(0,0,0,.6);"></div>`,
+      iconSize: [18,18], iconAnchor: [9,18]
+    })
+  }).addTo(map);
+
+  showGeoResults('');
+  geoSearchInput.value = '';
+
+  pendingLatLng = { lat, lng };
+  openForm(null);
+  if (label) document.getElementById('f-name').value = label;
+  if (extra) {
+    if (extra.address) document.getElementById('f-address').value = extra.address;
+    if (extra.provinsi) document.getElementById('f-provinsi').value = extra.provinsi;
+    if (extra.kota) document.getElementById('f-kota').value = extra.kota;
+    if (extra.zipcode) document.getElementById('f-zipcode').value = extra.zipcode;
+  }
+}
+
+geoSearchInput.addEventListener('input', () => {
+  const q = geoSearchInput.value.trim();
+  clearTimeout(geoSearchTimeout);
+
+  if (!q) { showGeoResults(''); return; }
+
+  const coord = parseCoordinatePaste(q);
+  if (coord) {
+    showGeoResults(`<div class="geo-result-item" id="geo-coord-result">📍 Ke koordinat: ${coord.lat.toFixed(6)}, ${coord.lng.toFixed(6)}<span>Klik untuk buka form tambah titik di sini</span></div>`);
+    document.getElementById('geo-coord-result').addEventListener('click', () => {
+      goToLocationAndAddPoint(coord.lat, coord.lng, '', null);
+    });
+    return;
+  }
+
+  if (q.length < 3) { showGeoResults(''); return; }
+
+  showGeoResults('<div class="geo-loading">Mencari...</div>');
+  geoSearchTimeout = setTimeout(async () => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&viewbox=114.3,-7.9,115.9,-9.2&bounded=1&countrycodes=id&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'id' } });
+      const results = await res.json();
+      if (!results || !results.length) {
+        showGeoResults('<div class="geo-loading">Tidak ditemukan. Coba kata kunci lain atau paste koordinat langsung.</div>');
+        return;
+      }
+      showGeoResults(results.map((r, i) => `
+        <div class="geo-result-item" data-idx="${i}">
+          <b>${(r.display_name || '').split(',')[0]}</b>
+          <span>${r.display_name}</span>
+        </div>
+      `).join(''));
+      geoResultsEl.querySelectorAll('.geo-result-item').forEach((el, i) => {
+        el.addEventListener('click', () => {
+          const r = results[i];
+          const addr = r.address || {};
+          goToLocationAndAddPoint(parseFloat(r.lat), parseFloat(r.lon), (r.display_name || '').split(',')[0], {
+            address: r.display_name,
+            provinsi: addr.state || 'Bali',
+            kota: addr.city || addr.county || addr.town || addr.regency || '',
+            zipcode: addr.postcode || ''
+          });
+        });
+      });
+    } catch (err) {
+      showGeoResults('<div class="geo-loading">Gagal mencari lokasi. Cek koneksi internet lalu coba lagi.</div>');
+    }
+  }, 500);
+});
+
+document.addEventListener('click', (e) => {
+  if (!document.getElementById('geo-search-wrap').contains(e.target)) showGeoResults('');
+});
+
+
+function makeIcon(op){
+  const c = tierMeta[op.tier].color;
+  const size = op.tier === 'high' ? 22 : op.tier === 'medium' ? 18 : 15;
+  if (op.tier === 'existing') {
+    // bentuk kotak + ikon gedung, supaya beda sekilas dari titik opportunity (bulat)
+    return L.divIcon({
+      className: 'custom-marker',
+      html: `<div style="width:20px;height:20px;background:${c};border-radius:5px;border:2.5px solid #0f1720;box-shadow:0 0 0 3px ${c}55, 0 2px 6px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:11px;">🏢</div>`,
+      iconSize: [20,20],
+      iconAnchor: [10,10],
+      popupAnchor: [0,-10]
+    });
+  }
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `<div style="width:${size}px;height:${size}px;background:${c};border-radius:50%;border:2.5px solid #0f1720;box-shadow:0 0 0 3px ${c}55, 0 2px 6px rgba(0,0,0,.5);"></div>`,
+    iconSize: [size,size],
+    iconAnchor: [size/2,size/2],
+    popupAnchor: [0,-size/2]
+  });
+}
+
+
+const markerIndex = {};
+const routeLineIndex = {};
+
+function popupHtml(op){
+  const meta = tierMeta[op.tier];
+  const camPills = op.cams.map(c => `<span class="cam-pill">👤 ${c}</span>`).join('');
+  const addrRow = op.address ? `<div class="popup-row">📍 ${op.address}${op.kota ? ', ' + op.kota : ''}${op.provinsi ? ', ' + op.provinsi : ''}</div>` : '';
+  const industryRow = op.industry ? `<div class="popup-row">🏷 ${op.industry}</div>` : '';
+  const isOwnerOrAdmin = canEditOp(op);
+  const hasPic = op.pic || op.picPhone || op.picPosition;
+  const picBox = hasPic ? `
+    <div class="popup-pic-box">
+      <div class="popup-row" style="margin:0;"><b>${op.pic || '(nama PIC belum diisi)'}</b>${op.picPosition ? ' — ' + op.picPosition : ''}${op.gender ? ' (' + op.gender + ')' : ''}</div>
+      ${op.picPhone ? `<div class="popup-row" style="margin:2px 0 0;">📞 <a href="tel:${String(op.picPhone).replace(/\s/g,'')}">${op.picPhone}</a></div>` : ''}
+      ${op.email ? `<div class="popup-row" style="margin:2px 0 0;">✉️ <a href="mailto:${op.email}">${op.email}</a></div>` : ''}
+    </div>` : (!isOwnerOrAdmin ? `<div class="popup-pic-box"><div class="popup-row" style="margin:0;color:var(--muted);">🔒 Kontak PIC dirahasiakan — hanya terlihat oleh pembuat titik & Administrator</div></div>` : '');
+  const photoRow = op.photoUrl ? `<div class="popup-row"><a href="${op.photoUrl}" target="_blank" style="color:var(--accent);">📷 Lihat Foto Evidence</a></div>` : '';
+  const creatorRow = op.createdBy ? `<div class="popup-row" style="color:var(--muted);">🖊 Dibuat oleh: ${getDisplayName(op.createdBy)}</div>` : '';
+  const editBtn = canEditOp(op) ? `<button class="btn-edit" data-edit="${op.id}">✎ Edit</button>` : '';
+  const deleteBtn = isAdmin() ? `<button class="btn-delete" data-del="${op.id}">🗑 Hapus</button>` : '';
+  const noPermRow = (!editBtn && !deleteBtn) ? `<div class="popup-row" style="color:var(--muted);font-style:italic;">Hanya pembuat titik ini atau Administrator yang bisa mengubahnya.</div>` : '';
+  return `
+    <div class="popup-title-row">
+      <div class="popup-name">${op.name}</div>
+      <span class="tier-badge" style="background:${meta.color}33;color:${meta.color};">${meta.label}</span>
+    </div>
+    <div class="popup-revenue">${fmtRupiah(op.revenue)}</div>
+    ${addrRow}
+    ${industryRow}
+    ${picBox}
+    ${photoRow}
+    ${creatorRow}
+    <div class="popup-row" style="font-weight:700;color:var(--text);margin-top:8px;">CAM Handle:</div>
+    <div class="popup-cams">${camPills || '<span style="color:var(--muted);font-size:11.5px;">Belum ada CAM ditugaskan</span>'}</div>
+    ${(editBtn || deleteBtn) ? `<div class="popup-actions">${editBtn}${deleteBtn}</div>` : noPermRow}
+  `;
+}
+
+function bindMarker(op){
+  const marker = L.marker([op.lat, op.lng], {icon: makeIcon(op)});
+  marker.bindPopup(() => popupHtml(op), {maxWidth: Math.min(280, window.innerWidth - 40)});
+  marker.on('popupopen', (e) => {
+    const el = e.popup.getElement();
+    const editBtn = el.querySelector(`[data-edit="${op.id}"]`);
+    const delBtn = el.querySelector(`[data-del="${op.id}"]`);
+    if (editBtn) editBtn.addEventListener('click', () => openForm(op));
+    if (delBtn) delBtn.addEventListener('click', async () => {
+      if (!isAdmin()) { showToast('Hanya Administrator yang bisa menghapus titik.'); return; }
+      if (!confirm(`Hapus titik "${op.name}"?`)) return;
+      try {
+        await apiDelete(op.id);
+        opportunities = opportunities.filter(o => o.id !== op.id);
+        map.removeLayer(marker);
+        delete markerIndex[op.id];
+        renderList(); applyFilters();
+        showToast('Titik dihapus.');
+      } catch (err) { showToast('Gagal hapus: ' + err.message); }
+    });
+  });
+  marker.addTo(map);
+  markerIndex[op.id] = marker;
+}
+
+function refreshMarker(op){
+  const marker = markerIndex[op.id];
+  if (!marker) return;
+  marker.setLatLng([op.lat, op.lng]);
+  marker.setIcon(makeIcon(op));
+  marker.setPopupContent(popupHtml(op));
+}
+
+// ============== ROUTE (JALUR CANVASSING) RENDERING ==============
+function routePopupHtml(route){
+  const team = teamMeta[route.team] || {name: route.team, color:'#888'};
+  const noteRow = route.note ? `<div class="popup-row">📝 ${route.note}</div>` : '';
+  const creatorRow = route.createdBy ? `<div class="popup-row" style="color:var(--muted);">🖊 Dibuat oleh: ${getDisplayName(route.createdBy)}</div>` : '';
+  const dateRow = route.createdAt ? `<div class="popup-row" style="color:var(--muted);">🗓 ${new Date(route.createdAt).toLocaleDateString('id-ID')}</div>` : '';
+  const deleteBtn = isAdmin() ? `<button class="btn-delete" data-delroute="${route.id}" style="flex:none;width:100%;">🗑 Hapus Jalur</button>` : '';
+  return `
+    <div class="popup-title-row">
+      <div class="popup-name">${team.name}</div>
+      <span class="tier-badge" style="background:${team.color}33;color:${team.color};">Jalur</span>
+    </div>
+    ${noteRow}
+    ${creatorRow}
+    ${dateRow}
+    ${deleteBtn ? `<div class="popup-actions">${deleteBtn}</div>` : ''}
+  `;
+}
+
+function bindRouteLine(route){
+  const team = teamMeta[route.team] || {name: route.team, color:'#888'};
+  const latlngs = route.points.map(p => [p[0], p[1]]);
+  const line = L.polyline(latlngs, {
+    color: team.color, weight: 6, opacity: 0.85, lineCap:'round', lineJoin:'round'
+  });
+  line.bindPopup(() => routePopupHtml(route), {maxWidth: Math.min(260, window.innerWidth - 40)});
+  line.on('popupopen', (e) => {
+    const el = e.popup.getElement();
+    const delBtn = el.querySelector(`[data-delroute="${route.id}"]`);
+    if (delBtn) delBtn.addEventListener('click', async () => {
+      if (!isAdmin()) { showToast('Hanya Administrator yang bisa menghapus jalur.'); return; }
+      if (!confirm('Hapus jalur canvassing ini?')) return;
+      try {
+        await apiDeleteRoute(route.id);
+        canvassRoutes = canvassRoutes.filter(r => r.id !== route.id);
+        map.removeLayer(line);
+        delete routeLineIndex[route.id];
+        renderRouteList(); applyRouteFilters();
+        showToast('Jalur dihapus.');
+      } catch (err) { showToast('Gagal hapus jalur: ' + err.message); }
+    });
+  });
+  line.addTo(map);
+  routeLineIndex[route.id] = line;
+}
+
+// ============== SIDEBAR MOBILE (bottom-sheet) ==============
+const sidebarEl = document.getElementById('sidebar');
+const sidebarHandle = document.getElementById('sidebar-handle');
+const handleLabel = document.getElementById('handle-label');
+function isMobileView(){ return window.innerWidth <= 720; }
+function toggleSidebar(forceExpand){
+  if (!isMobileView()) return;
+  const expand = forceExpand !== undefined ? forceExpand : !sidebarEl.classList.contains('expanded');
+  sidebarEl.classList.toggle('expanded', expand);
+  handleLabel.textContent = expand ? '▼ Sembunyikan Panel' : '▲ Tampilkan Panel';
+}
+sidebarHandle.addEventListener('click', () => toggleSidebar());
+// default: panel tertutup (peek) di mobile supaya peta terlihat penuh saat pertama buka
+if (isMobileView()) toggleSidebar(false);
+
+// ============== ADD-POINT MODE ==============
+let addingMode = false;
+let pendingLatLng = null;
+const addBtn = document.getElementById('add-btn');
+const addHint = document.getElementById('add-hint');
+const mapEl = document.getElementById('map');
+
+addBtn.addEventListener('click', () => {
+  if (routeDrawing) cancelRouteDrawing();
+  addingMode = !addingMode;
+  addBtn.classList.toggle('active', addingMode);
+  addBtn.textContent = addingMode ? '✕ Batal' : '+ Titik';
+  addHint.style.display = addingMode ? 'block' : 'none';
+  mapEl.classList.toggle('adding', addingMode);
+  if (addingMode) toggleSidebar(false); // tutup panel di mobile biar bisa tap peta
+});
+
+// ============== ROUTE DRAWING MODE ==============
+let routeDrawing = false;
+let routePoints = []; // array of L.LatLng
+let routeTempMarkers = [];
+let routeTempLine = null;
+const routeBtn = document.getElementById('route-btn');
+const routePanel = document.getElementById('route-panel');
+const routeFinishBtn = document.getElementById('route-finish');
+
+function updateRouteTempLine(){
+  if (routeTempLine) map.removeLayer(routeTempLine);
+  if (routePoints.length >= 2) {
+    routeTempLine = L.polyline(routePoints, {color:'#ef4444', weight:5, opacity:0.9, dashArray:'6,6'});
+    routeTempLine.addTo(map);
+  }
+  routeFinishBtn.disabled = routePoints.length < 2;
+}
+
+function addRoutePoint(latlng){
+  routePoints.push(latlng);
+  const m = L.circleMarker(latlng, {radius:5, color:'#fff', weight:2, fillColor:'#ef4444', fillOpacity:1});
+  m.addTo(map);
+  routeTempMarkers.push(m);
+  updateRouteTempLine();
+}
+
+function startRouteDrawing(){
+  routeDrawing = true;
+  routePoints = [];
+  routeTempMarkers = [];
+  routeBtn.classList.add('active');
+  routeBtn.textContent = '✕ Batal';
+  routePanel.style.display = 'flex';
+  mapEl.classList.add('routing');
+  toggleSidebar(false); // tutup panel di mobile biar bisa tap peta
+}
+
+function cancelRouteDrawing(){
+  routeDrawing = false;
+  routePoints = [];
+  routeTempMarkers.forEach(m => map.removeLayer(m));
+  routeTempMarkers = [];
+  if (routeTempLine) { map.removeLayer(routeTempLine); routeTempLine = null; }
+  routeBtn.classList.remove('active');
+  routeBtn.textContent = '🛣️ Jalan';
+  routePanel.style.display = 'none';
+  mapEl.classList.remove('routing');
+}
+
+routeBtn.addEventListener('click', () => {
+  if (addingMode) { addingMode = false; addBtn.classList.remove('active'); addBtn.textContent = '+ Titik'; addHint.style.display='none'; mapEl.classList.remove('adding'); }
+  if (routeDrawing) cancelRouteDrawing();
+  else startRouteDrawing();
+});
+
+document.getElementById('route-undo').addEventListener('click', () => {
+  if (!routePoints.length) return;
+  routePoints.pop();
+  const m = routeTempMarkers.pop();
+  if (m) map.removeLayer(m);
+  updateRouteTempLine();
+});
+document.getElementById('route-cancel').addEventListener('click', cancelRouteDrawing);
+routeFinishBtn.addEventListener('click', () => {
+  if (routePoints.length < 2) return;
+  openRouteForm();
+});
+
+map.on('click', (e) => {
+  if (routeDrawing) { addRoutePoint(e.latlng); return; }
+  if (!addingMode) return;
+  pendingLatLng = e.latlng;
+  addingMode = false;
+  addBtn.classList.remove('active');
+  addBtn.textContent = '+ Titik';
+  addHint.style.display = 'none';
+  mapEl.classList.remove('adding');
+  openForm(null);
+});
+
+// ============== ROUTE FORM ==============
+const routeFormOverlay = document.getElementById('route-form-overlay');
+const teamPickerEl = document.getElementById('team-picker');
+let selectedTeam = teamList[0].id;
+
+teamList.forEach(team => {
+  const opt = document.createElement('div');
+  opt.className = 'team-option';
+  opt.textContent = team.name;
+  opt.dataset.team = team.id;
+  opt.style.borderColor = team.color;
+  opt.addEventListener('click', () => selectTeam(team.id));
+  teamPickerEl.appendChild(opt);
+});
+function selectTeam(id){
+  selectedTeam = id;
+  teamPickerEl.querySelectorAll('.team-option').forEach(el => {
+    const on = el.dataset.team === id;
+    el.classList.toggle('selected', on);
+    el.style.background = on ? teamMeta[id].color : 'transparent';
+  });
+}
+selectTeam(teamList[0].id);
+
+function openRouteForm(){
+  document.getElementById('r-note').value = '';
+  selectTeam(teamList[0].id);
+  routeFormOverlay.style.display = 'flex';
+}
+function closeRouteForm(){
+  routeFormOverlay.style.display = 'none';
+}
+document.getElementById('r-cancel').addEventListener('click', closeRouteForm);
+document.getElementById('r-save').addEventListener('click', async () => {
+  const note = document.getElementById('r-note').value.trim();
+  const saveBtn = document.getElementById('r-save');
+  saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
+  try {
+    const route = {
+      id: 'route_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+      team: selectedTeam,
+      color: teamMeta[selectedTeam].color,
+      points: routePoints.map(p => [p.lat, p.lng]),
+      note,
+      createdBy: currentUser.username
+    };
+    await apiAddRoute(route);
+    route.createdAt = new Date().toISOString();
+    canvassRoutes.push(route);
+    bindRouteLine(route);
+    renderRouteList(); applyRouteFilters();
+    showToast('Jalur canvassing tersimpan.');
+    closeRouteForm();
+    cancelRouteDrawing();
+  } catch (err) {
+    showToast('Gagal menyimpan jalur: ' + err.message);
+  } finally {
+    saveBtn.disabled = false; saveBtn.textContent = 'Simpan Jalur';
+  }
+});
+
+// ============== OPPORTUNITY FORM MODAL ==============
+const overlay = document.getElementById('form-overlay');
+const tierPickerEl = document.getElementById('tier-picker');
+let editingId = null;
+let selectedTier = 'medium';
+
+Object.entries(tierMeta).forEach(([key, meta]) => {
+  const opt = document.createElement('div');
+  opt.className = 'tier-option';
+  opt.textContent = meta.label;
+  opt.dataset.tier = key;
+  opt.style.borderColor = meta.color;
+  opt.addEventListener('click', () => selectTier(key));
+  tierPickerEl.appendChild(opt);
+});
+function selectTier(key){
+  selectedTier = key;
+  tierPickerEl.querySelectorAll('.tier-option').forEach(el => {
+    const on = el.dataset.tier === key;
+    el.classList.toggle('selected', on);
+    el.style.background = on ? tierMeta[key].color : 'transparent';
+  });
+}
+
+let selectedPhotoFile = null;
+
+function openForm(existingOp){
+  editingId = existingOp ? existingOp.id : null;
+  document.getElementById('form-title').textContent = existingOp ? 'Edit Titik Opportunity' : 'Tambah Titik Opportunity';
+  document.getElementById('f-name').value = existingOp ? existingOp.name : '';
+  document.getElementById('f-pic').value = existingOp ? (existingOp.pic || '') : '';
+  document.getElementById('f-pic-phone').value = existingOp ? (existingOp.picPhone || '') : '';
+  document.getElementById('f-pic-position').value = existingOp ? (existingOp.picPosition || '') : '';
+  document.getElementById('f-gender').value = existingOp ? (existingOp.gender || '') : '';
+  document.getElementById('f-email').value = existingOp ? (existingOp.email || '') : '';
+  document.getElementById('f-industry').value = existingOp ? (existingOp.industry || '') : '';
+  document.getElementById('f-revenue').value = existingOp ? existingOp.revenue : '';
+  document.getElementById('f-address').value = existingOp ? (existingOp.address || '') : '';
+  document.getElementById('f-provinsi').value = existingOp ? (existingOp.provinsi || 'Bali') : 'Bali';
+  document.getElementById('f-kota').value = existingOp ? (existingOp.kota || '') : '';
+  document.getElementById('f-zipcode').value = existingOp ? (existingOp.zipcode || '') : '';
+  document.getElementById('f-photo').value = '';
+  selectedPhotoFile = null;
+  const previewEl = document.getElementById('f-photo-preview');
+  previewEl.innerHTML = existingOp && existingOp.photoUrl
+    ? `<a href="${existingOp.photoUrl}" target="_blank" style="color:var(--accent);font-size:11.5px;">📷 Lihat foto yang sudah ada tersimpan</a>`
+    : '';
+  selectTier(existingOp ? existingOp.tier : 'medium');
+  overlay.style.display = 'flex';
+}
+function closeForm(){
+  overlay.style.display = 'none';
+  editingId = null;
+  pendingLatLng = null;
+  selectedPhotoFile = null;
+}
+document.getElementById('f-cancel').addEventListener('click', closeForm);
+
+// Kompres & preview foto sebelum diupload (biar hemat kuota & cepat)
+document.getElementById('f-photo').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const previewEl = document.getElementById('f-photo-preview');
+  if (!file) { selectedPhotoFile = null; previewEl.innerHTML = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1280;
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        const scale = maxDim / Math.max(w, h);
+        w = Math.round(w * scale); h = Math.round(h * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      selectedPhotoFile = dataUrl.split(',')[1]; // base64 murni tanpa prefix
+      previewEl.innerHTML = `<img src="${dataUrl}" style="max-width:100%;border-radius:8px;border:1px solid var(--border);">`;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('f-save').addEventListener('click', async () => {
+  const name = document.getElementById('f-name').value.trim();
+  const pic = document.getElementById('f-pic').value.trim();
+  const picPhone = document.getElementById('f-pic-phone').value.trim();
+  const picPosition = document.getElementById('f-pic-position').value.trim();
+  const gender = document.getElementById('f-gender').value;
+  const email = document.getElementById('f-email').value.trim();
+  const industry = document.getElementById('f-industry').value;
+  const revenue = document.getElementById('f-revenue').value.replace(/[^0-9]/g, '');
+  const address = document.getElementById('f-address').value.trim();
+  const provinsi = document.getElementById('f-provinsi').value.trim();
+  const kota = document.getElementById('f-kota').value.trim();
+  const zipcode = document.getElementById('f-zipcode').value.trim();
+  if (!name) { alert('Nama hotel/villa wajib diisi.'); return; }
+  if (!revenue) { alert('Potensi revenue wajib diisi.'); return; }
+
+  const saveBtn = document.getElementById('f-save');
+  saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
+
+  try {
+    let savedOpId;
+    if (editingId) {
+      const op = opportunities.find(o => o.id === editingId);
+      op.name = name; op.pic = pic; op.picPhone = picPhone; op.picPosition = picPosition;
+      op.gender = gender; op.email = email; op.industry = industry;
+      op.revenue = Number(revenue); op.tier = selectedTier; op.address = address;
+      op.provinsi = provinsi; op.kota = kota; op.zipcode = zipcode;
+      // op.cams TIDAK diubah di sini — tetap sesuai CAM pembuat aslinya
+      await apiUpdate(op);
+      refreshMarker(op);
+      savedOpId = op.id;
+      showToast('Titik diperbarui.');
+    } else {
+      if (!pendingLatLng) { alert('Lokasi belum dipilih di peta.'); saveBtn.disabled=false; saveBtn.textContent='Simpan'; return; }
+      const op = {
+        id: 'op_' + Date.now() + '_' + Math.floor(Math.random()*1000),
+        name, pic, picPhone, picPosition, gender, email, industry,
+        revenue: Number(revenue), tier: selectedTier, cams: [currentUser.name], address,
+        provinsi, kota, zipcode, photoUrl: '',
+        lat: pendingLatLng.lat, lng: pendingLatLng.lng,
+        createdBy: currentUser.username
+      };
+      await apiAdd(op);
+      opportunities.push(op);
+      bindMarker(op);
+      savedOpId = op.id;
+      showToast('Titik baru tersimpan ke Google Sheets.');
+    }
+
+    if (selectedPhotoFile && savedOpId) {
+      try {
+        const url = await apiUploadPhoto(savedOpId, selectedPhotoFile);
+        const opRef = opportunities.find(o => o.id === savedOpId);
+        if (opRef) { opRef.photoUrl = url; refreshMarker(opRef); }
+      } catch (photoErr) {
+        showToast('Titik tersimpan, tapi foto gagal diupload: ' + photoErr.message);
+      }
+    }
+
+    renderList(); applyFilters();
+    closeForm();
+  } catch (err) {
+    showToast('Gagal menyimpan: ' + err.message);
+  } finally {
+    saveBtn.disabled = false; saveBtn.textContent = 'Simpan';
+  }
+
+});
+
+// ============== FILTERS (OPPORTUNITY) ==============
+const activeTiers = new Set(Object.keys(tierMeta));
+const tierFilterEl = document.getElementById('tier-filter');
+Object.entries(tierMeta).forEach(([key, meta]) => {
+  const chip = document.createElement('div');
+  chip.className = 'tier-chip on';
+  chip.textContent = meta.label;
+  chip.style.color = meta.color;
+  chip.style.background = meta.color + '22';
+  chip.dataset.tier = key;
+  chip.addEventListener('click', () => {
+    if (activeTiers.has(key)) { activeTiers.delete(key); chip.classList.remove('on'); }
+    else { activeTiers.add(key); chip.classList.add('on'); }
+    applyFilters();
+  });
+  tierFilterEl.appendChild(chip);
+});
+
+const camFilterEl = document.getElementById('cam-filter');
+loginUsers.forEach(u => {
+  const opt = document.createElement('option');
+  opt.value = u.name; opt.textContent = u.name;
+  camFilterEl.appendChild(opt);
+});
+camFilterEl.addEventListener('change', applyFilters);
+
+const searchInput = document.getElementById('search');
+searchInput.addEventListener('input', applyFilters);
+
+function applyFilters(){
+  const q = searchInput.value.trim().toLowerCase();
+  const camF = camFilterEl.value;
+  let visible = 0;
+  document.querySelectorAll('.item').forEach(itemEl => {
+    const op = opportunities.find(o => o.id === itemEl.dataset.id);
+    if (!op) return;
+    const tierOk = activeTiers.has(op.tier);
+    const searchOk = !q || op.name.toLowerCase().includes(q) || (op.address||'').toLowerCase().includes(q) || (op.pic||'').toLowerCase().includes(q);
+    const camOk = !camF || op.cams.includes(camF);
+    const show = tierOk && searchOk && camOk;
+    itemEl.classList.toggle('hidden', !show);
+    const marker = markerIndex[op.id];
+    if (marker) { show ? map.addLayer(marker) : map.removeLayer(marker); }
+    if (show) visible++;
+  });
+  document.getElementById('stat-count').textContent = visible;
+  const totalRevenue = opportunities
+    .filter(op => {
+      const el = document.querySelector(`.item[data-id="${op.id}"]`);
+      return el && !el.classList.contains('hidden');
+    })
+    .reduce((sum, op) => sum + op.revenue, 0);
+  document.getElementById('stat-revenue').textContent = fmtRupiah(totalRevenue);
+}
+
+// ============== FILTERS (TIM / ROUTE) ==============
+const activeTeams = new Set(teamList.map(t => t.id));
+const teamFilterEl = document.getElementById('team-filter');
+teamList.forEach(team => {
+  const chip = document.createElement('div');
+  chip.className = 'team-chip on';
+  chip.textContent = team.name;
+  chip.style.color = team.color;
+  chip.style.background = team.color + '22';
+  chip.dataset.team = team.id;
+  chip.addEventListener('click', () => {
+    if (activeTeams.has(team.id)) { activeTeams.delete(team.id); chip.classList.remove('on'); }
+    else { activeTeams.add(team.id); chip.classList.add('on'); }
+    applyRouteFilters();
+  });
+  teamFilterEl.appendChild(chip);
+});
+
+function applyRouteFilters(){
+  canvassRoutes.forEach(route => {
+    const line = routeLineIndex[route.id];
+    if (!line) return;
+    const show = activeTeams.has(route.team);
+    if (show) { if (!map.hasLayer(line)) line.addTo(map); }
+    else { if (map.hasLayer(line)) map.removeLayer(line); }
+  });
+}
+
+// ============== LIST (OPPORTUNITY) ==============
+const listEl = document.getElementById('list');
+function renderList(){
+  listEl.innerHTML = '';
+  if (opportunities.length === 0) {
+    listEl.innerHTML = `<div class="empty-state">Belum ada titik opportunity.<br>Klik "+ Titik" lalu klik lokasi di peta untuk mulai menandai hotel/villa target.</div>`;
+    return;
+  }
+  const sorted = [...opportunities].sort((a,b) => {
+    const order = {high:0, medium:1, small:2};
+    return order[a.tier] - order[b.tier];
+  });
+  sorted.forEach(op => {
+    const meta = tierMeta[op.tier];
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.dataset.id = op.id;
+    div.innerHTML = `
+      <div class="item-top">
+        <span class="tier-dot" style="background:${meta.color};"></span>
+        <span class="item-name">${op.name}</span>
+      </div>
+      <div class="item-revenue">${fmtRupiah(op.revenue)}</div>
+      ${op.pic ? `<div class="item-pic">👤 ${op.pic}${op.picPosition ? ' ('+op.picPosition+')' : ''}</div>` : ''}
+      <div class="item-cams">${op.cams.length ? op.cams.join(', ') : 'Belum ada CAM'}</div>
+    `;
+    div.addEventListener('click', () => {
+      map.flyTo([op.lat, op.lng], 16, {duration:0.6});
+      markerIndex[op.id].openPopup();
+    });
+    listEl.appendChild(div);
+  });
+}
+
+// ============== LIST (ROUTE) ==============
+const routeListEl = document.getElementById('route-list');
+function renderRouteList(){
+  routeListEl.innerHTML = '';
+  if (canvassRoutes.length === 0) {
+    routeListEl.innerHTML = `<div class="route-empty">Belum ada jalur ditandai. Klik "🛣️ Jalan" untuk mulai.</div>`;
+    return;
+  }
+  canvassRoutes.forEach(route => {
+    const team = teamMeta[route.team] || {name: route.team, color:'#888'};
+    const div = document.createElement('div');
+    div.className = 'route-item';
+    div.innerHTML = `
+      <span class="route-line-dot" style="background:${team.color};"></span>
+      <span class="route-name">${team.name}${route.note ? ' — ' + route.note : ''}</span>
+      ${isAdmin() ? `<span class="route-del" data-routeid="${route.id}">✕</span>` : ''}
+    `;
+    div.addEventListener('click', (e) => {
+      if (e.target.classList.contains('route-del')) return;
+      const line = routeLineIndex[route.id];
+      if (line) { map.fitBounds(line.getBounds(), {padding:[60,60]}); line.openPopup(); }
+    });
+    const delSpan = div.querySelector('.route-del');
+    if (delSpan) delSpan.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Hapus jalur canvassing ini?')) return;
+      try {
+        await apiDeleteRoute(route.id);
+        canvassRoutes = canvassRoutes.filter(r => r.id !== route.id);
+        const line = routeLineIndex[route.id];
+        if (line) map.removeLayer(line);
+        delete routeLineIndex[route.id];
+        renderRouteList();
+        showToast('Jalur dihapus.');
+      } catch (err) { showToast('Gagal hapus jalur: ' + err.message); }
+    });
+    routeListEl.appendChild(div);
+  });
+}
+
+// ============== LOAD / REFRESH ==============
+async function loadAndRender(showLoadingToast){
+  if (!isConfigured) { setConnStatus('err', 'Belum dikonfigurasi'); return; }
+  setConnStatus('', 'Memuat data...');
+  try {
+    const fresh = await apiList();
+    Object.values(markerIndex).forEach(m => map.removeLayer(m));
+    Object.keys(markerIndex).forEach(k => delete markerIndex[k]);
+    Object.values(routeLineIndex).forEach(l => map.removeLayer(l));
+    Object.keys(routeLineIndex).forEach(k => delete routeLineIndex[k]);
+
+    opportunities = fresh.opportunities;
+    canvassRoutes = fresh.routes;
+    opportunities.forEach(bindMarker);
+    canvassRoutes.forEach(bindRouteLine);
+
+    renderList(); applyFilters();
+    renderRouteList(); applyRouteFilters();
+    setConnStatus('ok', 'Tersambung ke Google Sheets');
+    if (showLoadingToast) showToast('Data diperbarui.');
+  } catch (err) {
+    setConnStatus('err', 'Gagal tersambung');
+    showToast('Gagal memuat data: ' + err.message);
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', (e) => {
+  e.target.classList.add('spinning');
+  loadAndRender(true).finally(() => setTimeout(() => e.target.classList.remove('spinning'), 800));
+});
+
+// Catatan: loadAndRender() & auto-refresh baru mulai jalan SETELAH login berhasil (lihat doLogin()).
+</script>
+</body>
+</html>
