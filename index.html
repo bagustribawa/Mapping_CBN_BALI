@@ -7,6 +7,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#152030; --panel2:#1b2838; --border:#2a3a4d;
@@ -17,7 +19,7 @@
   html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
   #app{display:flex;height:100vh;width:100vw;}
   #sidebar{width:340px;min-width:270px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-  #sidebar-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);}
+  #sidebar-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
   #sidebar-header h1{font-size:15.5px;margin:0 0 4px;font-weight:700;letter-spacing:.2px;}
   #sidebar-header p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.4;}
   #user-badge{display:flex;align-items:center;gap:8px;font-size:11px;margin-top:10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;}
@@ -56,20 +58,40 @@
   .geo-loading{padding:10px 12px;font-size:11.5px;color:var(--muted);}
   #export-btn{width:100%;margin-top:8px;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:700;font-size:12.5px;cursor:pointer;}
   #export-btn:hover{background:#22334a;border-color:var(--accent);}
+  #open-list-btn{width:calc(100% - 20px);margin:10px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-weight:700;font-size:13px;cursor:pointer;flex-shrink:0;}
+  #open-list-btn:hover{background:#22334a;border-color:var(--accent);}
+  #list-count-badge{color:var(--accent);}
+
+  #list-overlay{position:absolute;inset:0;background:rgba(6,10,16,.6);z-index:1400;display:none;align-items:center;justify-content:center;}
+  #list-modal-card{width:480px;max-width:94vw;height:80vh;max-height:640px;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;flex-direction:column;filter:none;}
+  #list-modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  #list-modal-header h2{font-size:16px;margin:0;}
+  #list-modal-close{background:var(--panel2);border:1px solid var(--border);color:var(--text);width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:13px;}
+  #list-modal-search{width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:13px;outline:none;flex-shrink:0;}
+  #list-cam-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;flex-shrink:0;}
+  .list-cam-tab{padding:6px 12px;border-radius:20px;font-size:11.5px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:var(--panel2);color:var(--muted);white-space:nowrap;}
+  .list-cam-tab.active{border-color:var(--accent);color:var(--accent);background:var(--accent)1a;}
+  #list-modal-body{flex:1;overflow-y:auto;padding-right:4px;}
+
+  #export-choice-overlay{position:absolute;inset:0;background:rgba(6,10,16,.6);z-index:1400;display:none;align-items:center;justify-content:center;}
+  #export-choice-card{width:360px;max-width:92vw;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;filter:none;}
+  #export-choice-card h2{font-size:16px;margin:0 0 4px;}
+  .export-choice-option{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:14px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:var(--text);cursor:pointer;margin-bottom:10px;}
+  .export-choice-option:hover{border-color:var(--accent);background:#22334a;}
+  #export-btn:hover{background:#22334a;border-color:var(--accent);}
   #search:focus{border-color:var(--accent);}
-  #filters{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px;}
+  #filters{padding:12px 18px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px;flex-shrink:0;}
   .tier-filter-row,.team-filter-row{display:flex;gap:6px;}
   .tier-chip,.team-chip{flex:1;text-align:center;font-size:11px;font-weight:700;padding:6px 4px;border-radius:7px;cursor:pointer;border:1.5px solid transparent;opacity:.45;user-select:none;transition:all .15s;}
   .tier-chip.on,.team-chip.on{opacity:1;border-color:currentColor;}
   .cam-filter-select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:12px;margin-top:2px;}
-  #route-section{padding:12px 18px;border-bottom:1px solid var(--border);}
+  #route-section{padding:12px 18px;border-bottom:1px solid var(--border);flex:1;overflow-y:auto;min-height:80px;}
   #route-list{max-height:130px;overflow-y:auto;margin-top:8px;display:flex;flex-direction:column;gap:6px;}
   .route-item{display:flex;align-items:center;gap:8px;font-size:11.5px;background:var(--panel2);border-radius:7px;padding:6px 8px;cursor:pointer;}
   .route-item .route-line-dot{width:16px;height:4px;border-radius:2px;flex-shrink:0;}
   .route-item .route-name{flex:1;}
   .route-item .route-del{color:#ef4444;font-weight:700;cursor:pointer;flex-shrink:0;}
   .route-empty{font-size:11px;color:var(--muted);margin-top:8px;}
-  #list{flex:1;overflow-y:auto;padding:6px 10px 16px;}
   .item{padding:10px 10px;border-radius:9px;cursor:pointer;margin-bottom:6px;border:1px solid var(--border);transition:background .15s;background:var(--panel2);}
   .item:hover{background:#22334a;}
   .item-top{display:flex;align-items:center;gap:8px;}
@@ -116,9 +138,9 @@
   .popup-actions button{flex:1;font-size:11.5px;padding:7px;border-radius:7px;border:none;cursor:pointer;font-weight:700;}
   .btn-edit{background:var(--panel2);color:var(--text);border:1px solid var(--border) !important;}
   .btn-delete{background:#ef444422;color:#ef4444;}
-  #form-overlay,#route-form-overlay,#login-overlay,#password-overlay,#export-overlay{position:absolute;inset:0;background:rgba(6,10,16,.55);z-index:900;display:none;align-items:center;justify-content:center;}
+  #form-overlay,#route-form-overlay,#login-overlay,#password-overlay,#export-overlay,#mom-export-overlay,#activity-form-overlay{position:absolute;inset:0;background:rgba(6,10,16,.55);z-index:900;display:none;align-items:center;justify-content:center;}
   #login-overlay{z-index:2000;background:var(--bg);display:flex;}
-  #form-card,#route-form-card,#login-card,#password-card,#export-card{width:360px;max-width:92vw;max-height:88vh;overflow-y:auto;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;filter:none;}
+  #form-card,#route-form-card,#login-card,#password-card,#export-card,#mom-export-card,#activity-form-card{width:360px;max-width:92vw;max-height:88vh;overflow-y:auto;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;filter:none;}
   #login-card{text-align:left;}
   #login-card h2{font-size:17px;margin:0 0 4px;}
   #login-card p{font-size:12px;color:var(--muted);margin:0 0 18px;}
@@ -219,7 +241,7 @@
         <button id="refresh-btn" title="Refresh data">🔄</button>
       </div>
       <input type="text" id="search" placeholder="Cari nama hotel/villa...">
-      <button id="export-btn">📊 Export Excel</button>
+      <button id="export-btn">📤 Export</button>
     </div>
     <div id="filters">
       <div>
@@ -236,7 +258,7 @@
       <div class="team-filter-row" id="team-filter"></div>
       <div id="route-list"></div>
     </div>
-    <div id="list"></div>
+    <button id="open-list-btn">📋 Lihat Daftar Titik <span id="list-count-badge">(0)</span></button>
   </div>
   <div id="map" class="dark-mode"></div>
   <button id="map-style-toggle" title="Ganti gaya peta">🟢 Warna Asli</button>
@@ -253,6 +275,36 @@
 <div id="stats-bar">
   <span><b id="stat-count">0</b> titik</span>
   <span>Total potensi: <b id="stat-revenue">Rp 0</b></span>
+</div>
+
+<div id="list-overlay">
+  <div id="list-modal-card">
+    <div id="list-modal-header">
+      <h2>📋 Daftar Titik Opportunity</h2>
+      <button id="list-modal-close">✕</button>
+    </div>
+    <input type="text" id="list-modal-search" placeholder="Cari nama hotel/villa...">
+    <div id="list-cam-tabs"></div>
+    <div id="list-modal-body"></div>
+  </div>
+</div>
+
+<div id="export-choice-overlay">
+  <div id="export-choice-card">
+    <h2>📤 Export Data</h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 16px;">Pilih jenis export yang kamu perlukan.</p>
+    <button class="export-choice-option" id="choice-excel">
+      <span style="font-size:20px;">📊</span>
+      <span><b>Export ke Excel</b><br><span style="color:var(--muted);font-size:11px;">Data titik & jalur, siap dianalisa / masuk Neo CRM</span></span>
+    </button>
+    <button class="export-choice-option" id="choice-mom">
+      <span style="font-size:20px;">📝</span>
+      <span><b>Export MoM (PDF)</b><br><span style="color:var(--muted);font-size:11px;">Minutes of Meeting titik yang kamu buat sendiri</span></span>
+    </button>
+    <div class="form-actions" style="margin-top:14px;">
+      <button class="btn-cancel" id="export-choice-cancel">Batal</button>
+    </div>
+  </div>
 </div>
 
 <div id="form-overlay">
@@ -291,10 +343,12 @@
     <div class="f-label">Industry</div>
     <select class="f-input" id="f-industry">
       <option value="">-- Pilih --</option>
-      <option value="Hospitality">Hospitality (Hotel/Resort)</option>
+      <option value="Hotels">Hotels</option>
+      <option value="Hospital">Hospital</option>
+      <option value="University">University</option>
+      <option value="School">School</option>
+      <option value="Retail">Retail</option>
       <option value="Villa">Villa</option>
-      <option value="Education">Education</option>
-      <option value="Healthcare">Healthcare</option>
       <option value="Corporate/Office">Corporate/Office</option>
       <option value="Internet Providers & Telecommunications">Internet Providers & Telecommunications</option>
       <option value="Government">Government</option>
@@ -308,6 +362,31 @@
 
     <div class="f-label">Alamat</div>
     <input type="text" class="f-input" id="f-address" placeholder="cth: Jl. Pandawa No.3, Legian">
+
+    <div class="f-label" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">📝 Sub Form MoM (opsional)</div>
+    <div class="f-row2">
+      <div>
+        <div class="f-label">Existing (pakai provider apa)</div>
+        <input type="text" class="f-input" id="f-mom-existing" placeholder="cth: Indihome / Biznet / Tidak ada">
+      </div>
+      <div>
+        <div class="f-label">Budget (Rp)</div>
+        <input type="text" class="f-input" id="f-mom-budget" placeholder="cth: 5000000" inputmode="numeric">
+      </div>
+    </div>
+    <div class="f-row2">
+      <div>
+        <div class="f-label">Bandwidth</div>
+        <input type="text" class="f-input" id="f-mom-bandwidth" placeholder="cth: 50 Mbps">
+      </div>
+      <div>
+        <div class="f-label">Contract (lama kontrak)</div>
+        <input type="text" class="f-input" id="f-mom-contract" placeholder="cth: 12 bulan">
+      </div>
+    </div>
+    <div class="f-label">Others (catatan bebas)</div>
+    <textarea class="f-input" id="f-mom-others" rows="3" placeholder="cth: sudah kirim penawaran, tunggu jawaban Pak Agus W2 Sept" style="resize:vertical;font-family:inherit;"></textarea>
+
     <div class="f-row2">
       <div>
         <div class="f-label">Provinsi</div>
@@ -378,6 +457,53 @@
     <div class="form-actions">
       <button class="btn-cancel" id="export-cancel">Batal</button>
       <button class="btn-save" id="export-confirm">⬇ Download Excel</button>
+    </div>
+  </div>
+</div>
+
+<div id="activity-form-overlay">
+  <div id="activity-form-card">
+    <h2>🕒 Update Kunjungan</h2>
+    <div class="f-label" style="margin-top:0;">Tanggal Kunjungan</div>
+    <input type="date" class="f-input" id="activity-date">
+    <div class="f-label">Catatan</div>
+    <textarea class="f-input" id="activity-notes" rows="4" placeholder="cth: Visit ulang, ketemu PIC, masih pertimbangkan budget" style="resize:vertical;font-family:inherit;"></textarea>
+    <div class="form-actions">
+      <button class="btn-cancel" id="activity-cancel">Batal</button>
+      <button class="btn-save" id="activity-save">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div id="mom-export-overlay">
+  <div id="mom-export-card">
+    <h2>📝 Export MoM (PDF)</h2>
+    <p style="font-size:11.5px;color:var(--muted);margin:0 0 12px;">Hanya menampilkan titik yang <b>kamu buat sendiri</b> (sesuai akun yang sedang login).</p>
+    <div class="f-row2">
+      <div>
+        <div class="f-label" style="margin-top:0;">Dari Tanggal</div>
+        <input type="date" class="f-input" id="mom-from">
+      </div>
+      <div>
+        <div class="f-label" style="margin-top:0;">Sampai Tanggal</div>
+        <input type="date" class="f-input" id="mom-to">
+      </div>
+    </div>
+    <div class="f-label">Lokasi</div>
+    <input type="text" class="f-input" id="mom-lokasi" placeholder="cth: Badung Kuta Seminyak">
+    <div class="f-row2">
+      <div>
+        <div class="f-label">Jam</div>
+        <input type="text" class="f-input" id="mom-jam" placeholder="cth: 08:00-17:00" value="08:00-17:00">
+      </div>
+      <div>
+        <div class="f-label">Agenda</div>
+        <input type="text" class="f-input" id="mom-agenda" placeholder="cth: Meeting dan Follow up" value="Meeting dan Follow up">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" id="mom-cancel">Batal</button>
+      <button class="btn-save" id="mom-confirm">⬇ Download PDF</button>
     </div>
   </div>
 </div>
@@ -545,21 +671,145 @@ loginUsers.forEach(u => {
   exportCamFilterEl.appendChild(opt);
 });
 
+// ============== PILIHAN EXPORT (Excel vs MoM) ==============
+const exportChoiceOverlay = document.getElementById('export-choice-overlay');
 document.getElementById('export-btn').addEventListener('click', () => {
+  exportChoiceOverlay.style.display = 'flex';
+});
+document.getElementById('export-choice-cancel').addEventListener('click', () => { exportChoiceOverlay.style.display = 'none'; });
+
+document.getElementById('choice-excel').addEventListener('click', () => {
+  exportChoiceOverlay.style.display = 'none';
   const fromInput = document.getElementById('export-from');
   const toInput = document.getElementById('export-to');
-  // default: dari tanggal titik pertama dibuat, sampai hari ini
   if (!fromInput.value && opportunities.length) {
     const dates = opportunities.map(o => o.createdAt).filter(Boolean).map(d => new Date(d));
-    if (dates.length) {
-      const earliest = new Date(Math.min(...dates));
-      fromInput.value = earliest.toISOString().slice(0, 10);
-    }
+    if (dates.length) fromInput.value = new Date(Math.min(...dates)).toISOString().slice(0, 10);
   }
   if (!toInput.value) toInput.value = new Date().toISOString().slice(0, 10);
   exportOverlay.style.display = 'flex';
 });
-document.getElementById('export-cancel').addEventListener('click', () => { exportOverlay.style.display = 'none'; });
+
+document.getElementById('choice-mom').addEventListener('click', () => {
+  exportChoiceOverlay.style.display = 'none';
+  const fromInput = document.getElementById('mom-from');
+  const toInput = document.getElementById('mom-to');
+  const myOps = opportunities.filter(o => (o.createdBy||'').toLowerCase() === currentUser.username.toLowerCase());
+  if (!fromInput.value && myOps.length) {
+    const dates = myOps.map(o => o.createdAt).filter(Boolean).map(d => new Date(d));
+    if (dates.length) fromInput.value = new Date(Math.min(...dates)).toISOString().slice(0, 10);
+  }
+  if (!toInput.value) toInput.value = new Date().toISOString().slice(0, 10);
+  document.getElementById('mom-export-overlay').style.display = 'flex';
+});
+document.getElementById('mom-cancel').addEventListener('click', () => { document.getElementById('mom-export-overlay').style.display = 'none'; });
+
+document.getElementById('mom-confirm').addEventListener('click', () => {
+  const fromVal = document.getElementById('mom-from').value;
+  const toVal = document.getElementById('mom-to').value;
+  const lokasi = document.getElementById('mom-lokasi').value.trim() || '-';
+  const jam = document.getElementById('mom-jam').value.trim() || '-';
+  const agenda = document.getElementById('mom-agenda').value.trim() || '-';
+  const fromDate = fromVal ? new Date(fromVal + 'T00:00:00') : null;
+  const toDate = toVal ? new Date(toVal + 'T23:59:59') : null;
+
+  const rows = opportunities.filter(op => {
+    if ((op.createdBy || '').toLowerCase() !== currentUser.username.toLowerCase()) return false;
+    if (!op.createdAt) return !(fromDate || toDate);
+    const d = new Date(op.createdAt);
+    if (fromDate && d < fromDate) return false;
+    if (toDate && d > toDate) return false;
+    return true;
+  });
+
+  if (!rows.length) { showToast('Tidak ada titik yang kamu buat pada rentang tanggal ini.'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+  doc.text('PT Cyberindo Aditama', 40, 40);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.text('CA-JKT-MR-FRM-1105067-1.1', pageWidth - 40, 40, { align: 'right' });
+  doc.setDrawColor(180); doc.line(40, 48, pageWidth - 40, 48);
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.text('MOM', pageWidth / 2, 72, { align: 'center' });
+
+  const fmtDate = (v) => v ? new Date(v + 'T00:00:00').toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '-';
+  const tanggalLabel = (fromVal && toVal) ? `${fmtDate(fromVal)} s/d ${fmtDate(toVal)}` : (fromVal ? fmtDate(fromVal) : (toVal ? fmtDate(toVal) : 'Semua tanggal'));
+
+  doc.setFontSize(9.5); doc.setFont('helvetica', 'normal');
+  let y = 92;
+  const infoLine = (label, value, x) => { doc.setFont('helvetica','bold'); doc.text(label + ':', x, y); doc.setFont('helvetica','normal'); doc.text(String(value), x + 70, y); };
+  infoLine('Tanggal', tanggalLabel, 40);
+  infoLine('Jam', jam, 320);
+  y += 16;
+  infoLine('Lokasi', lokasi, 40);
+  infoLine('Halaman', '1', 320);
+  y += 16;
+  infoLine('Agenda', agenda, 40);
+  y += 16;
+  infoLine('Penulis', currentUser.name, 40);
+  y += 16;
+  infoLine('Peserta', currentUser.name, 40);
+  y += 14;
+
+  const buildKeterangan = (op) => {
+    const parts = [];
+    if (op.momExisting) parts.push(`Existing: ${op.momExisting}`);
+    if (op.momBudget) parts.push(`Budget: ${fmtRupiah(op.momBudget)}`);
+    if (op.momBandwidth) parts.push(`Bandwidth: ${op.momBandwidth}`);
+    if (op.momContract) parts.push(`Contract: ${op.momContract}`);
+    if (op.momOthers) parts.push(op.momOthers);
+    return parts.length ? parts.join('\n') : '-';
+  };
+
+  const body = rows.map((op, i) => [
+    i + 1,
+    op.name + (op.address ? '\n' + op.address : ''),
+    buildKeterangan(op),
+    '',
+    op.pic || '-',
+    ''
+  ]);
+
+  doc.autoTable({
+    startY: y + 10,
+    head: [['No', 'Nama Company', 'Keterangan', 'Batas Waktu', 'PIC', 'Status']],
+    body,
+    styles: { fontSize: 8.5, cellPadding: 5, valign: 'top', overflow: 'linebreak' },
+    headStyles: { fillColor: [51, 65, 85], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      0: { cellWidth: 24, halign: 'center' },
+      1: { cellWidth: 105 },
+      2: { cellWidth: 190 },
+      3: { cellWidth: 55, halign: 'center' },
+      4: { cellWidth: 70 },
+      5: { cellWidth: 45, halign: 'center' },
+    },
+    margin: { left: 40, right: 40 },
+    didDrawPage: () => {
+      const pageCount = doc.internal.getNumberOfPages();
+      doc.setFontSize(8); doc.setTextColor(120);
+      doc.text(`Page ${doc.internal.getCurrentPageInfo().pageNumber} of ${pageCount}`, 40, doc.internal.pageSize.getHeight() - 20);
+    }
+  });
+
+  const finalY = doc.lastAutoTable.finalY || y + 10;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+  doc.text('Dibuat oleh,', 40, finalY + 30);
+  doc.setFont('helvetica', 'bold');
+  doc.text(currentUser.name, 40, finalY + 44);
+
+  const filenameDate = (fromVal || 'awal') + '_sd_' + (toVal || 'sekarang');
+  doc.save(`MOM_${currentUser.username}_${filenameDate}.pdf`);
+  document.getElementById('mom-export-overlay').style.display = 'none';
+  showToast('MoM PDF sedang diunduh.');
+});
+
+
 
 document.getElementById('export-confirm').addEventListener('click', () => {
   const fromVal = document.getElementById('export-from').value;
@@ -684,6 +934,8 @@ async function apiList(){
     address: str(o.address), name: str(o.name), createdBy: str(o.createdBy),
     industry: str(o.industry), gender: str(o.gender), email: str(o.email),
     provinsi: str(o.provinsi), kota: str(o.kota), zipcode: str(o.zipcode), photoUrl: str(o.photoUrl),
+    momExisting: str(o.momExisting), momBandwidth: str(o.momBandwidth), momContract: str(o.momContract), momOthers: str(o.momOthers),
+    momBudget: Number(o.momBudget) || 0,
   }));
   const routes = (json.routes || []).map(r => ({...r, points: Array.isArray(r.points) ? r.points : JSON.parse(r.points || '[]')}));
   return { opportunities: ops, routes };
@@ -719,6 +971,12 @@ async function apiUploadPhoto(id, base64){
   if (!json.ok) throw new Error(json.error || 'Gagal upload foto');
   return json.url;
 }
+async function apiAddActivity(id, date, notes){
+  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addActivity', id, date, notes, username: currentUser.username})});
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Gagal menyimpan kunjungan');
+  return json;
+}
 
 // ============== MAP INIT (OpenStreetMap, tanpa API key) ==============
 const map = L.map('map', {zoomControl:false}).setView([-8.716, 115.175], 14);
@@ -737,7 +995,25 @@ styleToggleBtn.addEventListener('click', () => {
 });
 
 // ============== LOKASI SAYA (GPS) ==============
-let myLocationMarker = null, myLocationCircle = null, watchId = null;
+let myLocationMarker = null, myLocationCircle = null, watchId = null, myCurrentPos = null;
+const MAX_ADD_POINT_DISTANCE_M = 20;
+
+function haversineMeters(lat1, lng1, lat2, lng2){
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Cek apakah CAM boleh menempatkan titik baru di (lat,lng): GPS harus aktif & dalam radius 20m
+function checkCanPlacePoint(lat, lng){
+  if (!myCurrentPos) return { ok: false, reason: 'no-gps' };
+  const dist = haversineMeters(myCurrentPos.lat, myCurrentPos.lng, lat, lng);
+  if (dist > MAX_ADD_POINT_DISTANCE_M) return { ok: false, reason: 'too-far', distance: dist };
+  return { ok: true, distance: dist };
+}
+
 const locateBtn = document.getElementById('locate-btn');
 locateBtn.addEventListener('click', () => {
   if (!navigator.geolocation) { showToast('Browser ini tidak mendukung layanan lokasi.'); return; }
@@ -745,6 +1021,7 @@ locateBtn.addEventListener('click', () => {
     // sudah aktif -> matikan
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
+    myCurrentPos = null;
     locateBtn.classList.remove('active');
     if (myLocationMarker) { map.removeLayer(myLocationMarker); myLocationMarker = null; }
     if (myLocationCircle) { map.removeLayer(myLocationCircle); myLocationCircle = null; }
@@ -754,6 +1031,7 @@ locateBtn.addEventListener('click', () => {
   showToast('Meminta izin akses lokasi...');
   watchId = navigator.geolocation.watchPosition((pos) => {
     const { latitude, longitude, accuracy } = pos.coords;
+    myCurrentPos = { lat: latitude, lng: longitude };
     if (!myLocationMarker) {
       myLocationMarker = L.marker([latitude, longitude], {
         icon: L.divIcon({
@@ -771,6 +1049,7 @@ locateBtn.addEventListener('click', () => {
   }, (err) => {
     locateBtn.classList.remove('active');
     watchId = null;
+    myCurrentPos = null;
     if (err.code === 1) showToast('Izin lokasi ditolak. Aktifkan izin lokasi di pengaturan browser/HP untuk pakai fitur ini.');
     else showToast('Gagal mendapatkan lokasi: ' + err.message);
   }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
@@ -808,6 +1087,16 @@ function goToLocationAndAddPoint(lat, lng, label, extra){
 
   showGeoResults('');
   geoSearchInput.value = '';
+
+  const check = checkCanPlacePoint(lat, lng);
+  if (!check.ok) {
+    if (check.reason === 'no-gps') {
+      showToast('Lokasi kamu belum terdeteksi. Aktifkan 📍 Lokasi Saya dulu sebelum membuat titik.');
+    } else {
+      showToast(`Lokasi ini ${Math.round(check.distance)}m dari posisi kamu — maksimal ${MAX_ADD_POINT_DISTANCE_M}m untuk bisa membuat titik. Dekati lokasinya dulu.`);
+    }
+    return;
+  }
 
   pendingLatLng = { lat, lng };
   openForm(null);
@@ -916,10 +1205,35 @@ function popupHtml(op){
       ${op.email ? `<div class="popup-row" style="margin:2px 0 0;">✉️ <a href="mailto:${op.email}">${op.email}</a></div>` : ''}
     </div>` : (!isOwnerOrAdmin ? `<div class="popup-pic-box"><div class="popup-row" style="margin:0;color:var(--muted);">🔒 Kontak PIC dirahasiakan — hanya terlihat oleh pembuat titik & Administrator</div></div>` : '');
   const photoRow = op.photoUrl ? `<div class="popup-row"><a href="${op.photoUrl}" target="_blank" style="color:var(--accent);">📷 Lihat Foto Evidence</a></div>` : '';
+  const hasMom = op.momExisting || op.momBudget || op.momBandwidth || op.momContract || op.momOthers;
+  const momRow = hasMom ? `
+    <div class="popup-pic-box">
+      <div class="popup-row" style="margin:0;font-weight:700;color:var(--text);">📝 Sub Form MoM</div>
+      ${op.momExisting ? `<div class="popup-row" style="margin:3px 0 0;">Existing: ${op.momExisting}</div>` : ''}
+      ${op.momBudget ? `<div class="popup-row" style="margin:3px 0 0;">Budget: ${fmtRupiah(op.momBudget)}</div>` : ''}
+      ${op.momBandwidth ? `<div class="popup-row" style="margin:3px 0 0;">Bandwidth: ${op.momBandwidth}</div>` : ''}
+      ${op.momContract ? `<div class="popup-row" style="margin:3px 0 0;">Contract: ${op.momContract}</div>` : ''}
+      ${op.momOthers ? `<div class="popup-row" style="margin:3px 0 0;white-space:pre-wrap;">Others: ${op.momOthers}</div>` : ''}
+    </div>` : '';
   const creatorRow = op.createdBy ? `<div class="popup-row" style="color:var(--muted);">🖊 Dibuat oleh: ${getDisplayName(op.createdBy)}</div>` : '';
   const editBtn = canEditOp(op) ? `<button class="btn-edit" data-edit="${op.id}">✎ Edit</button>` : '';
+  const activityBtn = canEditOp(op) ? `<button class="btn-edit" data-activity="${op.id}">🕒 Update Kunjungan</button>` : '';
   const deleteBtn = isAdmin() ? `<button class="btn-delete" data-del="${op.id}">🗑 Hapus</button>` : '';
   const noPermRow = (!editBtn && !deleteBtn) ? `<div class="popup-row" style="color:var(--muted);font-style:italic;">Hanya pembuat titik ini atau Administrator yang bisa mengubahnya.</div>` : '';
+
+  let activities = [];
+  try { activities = op.activityLog ? JSON.parse(op.activityLog) : []; } catch(e) { activities = []; }
+  const activityRows = activities.length ? `
+    <div class="popup-pic-box">
+      <div class="popup-row" style="margin:0;font-weight:700;color:var(--text);">🕒 Riwayat Kunjungan</div>
+      ${activities.slice().reverse().map(a => `
+        <div class="popup-row" style="margin:6px 0 0;padding-top:6px;border-top:1px solid var(--border);">
+          <b>${new Date(a.date).toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'numeric'})}</b> — ${getDisplayName(a.by)}<br>
+          <span style="color:#c7d3df;">${a.notes || '-'}</span>
+        </div>
+      `).join('')}
+    </div>` : '';
+
   return `
     <div class="popup-title-row">
       <div class="popup-name">${op.name}</div>
@@ -930,10 +1244,12 @@ function popupHtml(op){
     ${industryRow}
     ${picBox}
     ${photoRow}
+    ${momRow}
+    ${activityRows}
     ${creatorRow}
     <div class="popup-row" style="font-weight:700;color:var(--text);margin-top:8px;">CAM Handle:</div>
     <div class="popup-cams">${camPills || '<span style="color:var(--muted);font-size:11.5px;">Belum ada CAM ditugaskan</span>'}</div>
-    ${(editBtn || deleteBtn) ? `<div class="popup-actions">${editBtn}${deleteBtn}</div>` : noPermRow}
+    ${(editBtn || deleteBtn || activityBtn) ? `<div class="popup-actions">${activityBtn}${editBtn}${deleteBtn}</div>` : noPermRow}
   `;
 }
 
@@ -944,7 +1260,9 @@ function bindMarker(op){
     const el = e.popup.getElement();
     const editBtn = el.querySelector(`[data-edit="${op.id}"]`);
     const delBtn = el.querySelector(`[data-del="${op.id}"]`);
+    const activityBtn = el.querySelector(`[data-activity="${op.id}"]`);
     if (editBtn) editBtn.addEventListener('click', () => openForm(op));
+    if (activityBtn) activityBtn.addEventListener('click', () => openActivityForm(op));
     if (delBtn) delBtn.addEventListener('click', async () => {
       if (!isAdmin()) { showToast('Hanya Administrator yang bisa menghapus titik.'); return; }
       if (!confirm(`Hapus titik "${op.name}"?`)) return;
@@ -961,6 +1279,39 @@ function bindMarker(op){
   marker.addTo(map);
   markerIndex[op.id] = marker;
 }
+
+// ============== UPDATE KUNJUNGAN (activity log) ==============
+let activityTargetOp = null;
+function openActivityForm(op){
+  activityTargetOp = op;
+  document.getElementById('activity-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('activity-notes').value = '';
+  document.getElementById('activity-form-overlay').style.display = 'flex';
+}
+document.getElementById('activity-cancel').addEventListener('click', () => {
+  document.getElementById('activity-form-overlay').style.display = 'none';
+  activityTargetOp = null;
+});
+document.getElementById('activity-save').addEventListener('click', async () => {
+  if (!activityTargetOp) return;
+  const date = document.getElementById('activity-date').value || new Date().toISOString().slice(0, 10);
+  const notes = document.getElementById('activity-notes').value.trim();
+  if (!notes) { alert('Isi catatan kunjungan dulu.'); return; }
+  const saveBtn = document.getElementById('activity-save');
+  saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
+  try {
+    const result = await apiAddActivity(activityTargetOp.id, date, notes);
+    activityTargetOp.activityLog = result.activityLog;
+    refreshMarker(activityTargetOp);
+    showToast('Kunjungan tercatat.');
+    document.getElementById('activity-form-overlay').style.display = 'none';
+    activityTargetOp = null;
+  } catch (err) {
+    showToast('Gagal menyimpan kunjungan: ' + err.message);
+  } finally {
+    saveBtn.disabled = false; saveBtn.textContent = 'Simpan';
+  }
+});
 
 function refreshMarker(op){
   const marker = markerIndex[op.id];
@@ -1039,10 +1390,18 @@ const addHint = document.getElementById('add-hint');
 const mapEl = document.getElementById('map');
 
 addBtn.addEventListener('click', () => {
+  if (!addingMode) {
+    // mau MASUK mode tambah titik -> wajib GPS aktif dulu
+    if (!myCurrentPos) {
+      showToast('Aktifkan dulu 📍 Lokasi Saya (pojok kanan atas peta) sebelum membuat titik baru.');
+      return;
+    }
+  }
   if (routeDrawing) cancelRouteDrawing();
   addingMode = !addingMode;
   addBtn.classList.toggle('active', addingMode);
   addBtn.textContent = addingMode ? '✕ Batal' : '+ Titik';
+  addHint.textContent = addingMode ? `🎯 Klik lokasi di peta (maks ${MAX_ADD_POINT_DISTANCE_M}m dari posisi kamu)` : '';
   addHint.style.display = addingMode ? 'block' : 'none';
   mapEl.classList.toggle('adding', addingMode);
   if (addingMode) toggleSidebar(false); // tutup panel di mobile biar bisa tap peta
@@ -1119,6 +1478,15 @@ routeFinishBtn.addEventListener('click', () => {
 map.on('click', (e) => {
   if (routeDrawing) { addRoutePoint(e.latlng); return; }
   if (!addingMode) return;
+  const check = checkCanPlacePoint(e.latlng.lat, e.latlng.lng);
+  if (!check.ok) {
+    if (check.reason === 'no-gps') {
+      showToast('Lokasi kamu belum terdeteksi. Aktifkan 📍 Lokasi Saya dulu.');
+    } else {
+      showToast(`Terlalu jauh dari posisi kamu (${Math.round(check.distance)}m). Maksimal ${MAX_ADD_POINT_DISTANCE_M}m dari lokasi kamu saat ini.`);
+    }
+    return;
+  }
   pendingLatLng = e.latlng;
   addingMode = false;
   addBtn.classList.remove('active');
@@ -1230,6 +1598,11 @@ function openForm(existingOp){
   document.getElementById('f-provinsi').value = existingOp ? (existingOp.provinsi || 'Bali') : 'Bali';
   document.getElementById('f-kota').value = existingOp ? (existingOp.kota || '') : '';
   document.getElementById('f-zipcode').value = existingOp ? (existingOp.zipcode || '') : '';
+  document.getElementById('f-mom-existing').value = existingOp ? (existingOp.momExisting || '') : '';
+  document.getElementById('f-mom-budget').value = existingOp ? (existingOp.momBudget || '') : '';
+  document.getElementById('f-mom-bandwidth').value = existingOp ? (existingOp.momBandwidth || '') : '';
+  document.getElementById('f-mom-contract').value = existingOp ? (existingOp.momContract || '') : '';
+  document.getElementById('f-mom-others').value = existingOp ? (existingOp.momOthers || '') : '';
   document.getElementById('f-photo').value = '';
   selectedPhotoFile = null;
   const previewEl = document.getElementById('f-photo-preview');
@@ -1287,6 +1660,11 @@ document.getElementById('f-save').addEventListener('click', async () => {
   const provinsi = document.getElementById('f-provinsi').value.trim();
   const kota = document.getElementById('f-kota').value.trim();
   const zipcode = document.getElementById('f-zipcode').value.trim();
+  const momExisting = document.getElementById('f-mom-existing').value.trim();
+  const momBudget = document.getElementById('f-mom-budget').value.replace(/[^0-9]/g, '');
+  const momBandwidth = document.getElementById('f-mom-bandwidth').value.trim();
+  const momContract = document.getElementById('f-mom-contract').value.trim();
+  const momOthers = document.getElementById('f-mom-others').value.trim();
   if (!name) { alert('Nama hotel/villa wajib diisi.'); return; }
   if (!revenue) { alert('Potensi revenue wajib diisi.'); return; }
 
@@ -1301,6 +1679,7 @@ document.getElementById('f-save').addEventListener('click', async () => {
       op.gender = gender; op.email = email; op.industry = industry;
       op.revenue = Number(revenue); op.tier = selectedTier; op.address = address;
       op.provinsi = provinsi; op.kota = kota; op.zipcode = zipcode;
+      op.momExisting = momExisting; op.momBudget = Number(momBudget)||0; op.momBandwidth = momBandwidth; op.momContract = momContract; op.momOthers = momOthers;
       // op.cams TIDAK diubah di sini — tetap sesuai CAM pembuat aslinya
       await apiUpdate(op);
       refreshMarker(op);
@@ -1308,11 +1687,17 @@ document.getElementById('f-save').addEventListener('click', async () => {
       showToast('Titik diperbarui.');
     } else {
       if (!pendingLatLng) { alert('Lokasi belum dipilih di peta.'); saveBtn.disabled=false; saveBtn.textContent='Simpan'; return; }
+      const distCheck = checkCanPlacePoint(pendingLatLng.lat, pendingLatLng.lng);
+      if (!distCheck.ok) {
+        alert(distCheck.reason === 'no-gps' ? 'Lokasi kamu belum terdeteksi. Aktifkan 📍 Lokasi Saya dulu.' : `Lokasi ini terlalu jauh dari posisi kamu saat ini (maks ${MAX_ADD_POINT_DISTANCE_M}m).`);
+        saveBtn.disabled=false; saveBtn.textContent='Simpan'; return;
+      }
       const op = {
         id: 'op_' + Date.now() + '_' + Math.floor(Math.random()*1000),
         name, pic, picPhone, picPosition, gender, email, industry,
         revenue: Number(revenue), tier: selectedTier, cams: [currentUser.name], address,
         provinsi, kota, zipcode, photoUrl: '',
+        momExisting, momBudget: Number(momBudget)||0, momBandwidth, momContract, momOthers,
         lat: pendingLatLng.lat, lng: pendingLatLng.lng,
         createdBy: currentUser.username
       };
@@ -1375,27 +1760,19 @@ searchInput.addEventListener('input', applyFilters);
 function applyFilters(){
   const q = searchInput.value.trim().toLowerCase();
   const camF = camFilterEl.value;
-  let visible = 0;
-  document.querySelectorAll('.item').forEach(itemEl => {
-    const op = opportunities.find(o => o.id === itemEl.dataset.id);
-    if (!op) return;
+  let visible = 0, totalRevenue = 0;
+  opportunities.forEach(op => {
     const tierOk = activeTiers.has(op.tier);
     const searchOk = !q || op.name.toLowerCase().includes(q) || (op.address||'').toLowerCase().includes(q) || (op.pic||'').toLowerCase().includes(q);
     const camOk = !camF || op.cams.includes(camF);
     const show = tierOk && searchOk && camOk;
-    itemEl.classList.toggle('hidden', !show);
     const marker = markerIndex[op.id];
     if (marker) { show ? map.addLayer(marker) : map.removeLayer(marker); }
-    if (show) visible++;
+    if (show) { visible++; totalRevenue += op.revenue; }
   });
   document.getElementById('stat-count').textContent = visible;
-  const totalRevenue = opportunities
-    .filter(op => {
-      const el = document.querySelector(`.item[data-id="${op.id}"]`);
-      return el && !el.classList.contains('hidden');
-    })
-    .reduce((sum, op) => sum + op.revenue, 0);
   document.getElementById('stat-revenue').textContent = fmtRupiah(totalRevenue);
+  document.getElementById('list-count-badge').textContent = `(${opportunities.length})`;
 }
 
 // ============== FILTERS (TIM / ROUTE) ==============
@@ -1427,38 +1804,80 @@ function applyRouteFilters(){
 }
 
 // ============== LIST (OPPORTUNITY) ==============
-const listEl = document.getElementById('list');
+// ============== MODAL: DAFTAR TITIK (grup per CAM) ==============
+const listOverlay = document.getElementById('list-overlay');
+const listModalBody = document.getElementById('list-modal-body');
+const listModalSearch = document.getElementById('list-modal-search');
+const listCamTabsEl = document.getElementById('list-cam-tabs');
+let activeListTab = 'semua';
+
 function renderList(){
-  listEl.innerHTML = '';
-  if (opportunities.length === 0) {
-    listEl.innerHTML = `<div class="empty-state">Belum ada titik opportunity.<br>Klik "+ Titik" lalu klik lokasi di peta untuk mulai menandai hotel/villa target.</div>`;
+  document.getElementById('list-count-badge').textContent = `(${opportunities.length})`;
+  if (listOverlay.style.display === 'flex') renderListModal();
+}
+
+function getCamTabList(){
+  const names = new Set();
+  opportunities.forEach(op => (op.cams || []).forEach(c => names.add(c)));
+  return ['semua', ...Array.from(names).sort()];
+}
+
+function renderListModal(){
+  const tabs = getCamTabList();
+  if (!tabs.includes(activeListTab)) activeListTab = 'semua';
+  listCamTabsEl.innerHTML = tabs.map(t => `
+    <div class="list-cam-tab ${t === activeListTab ? 'active' : ''}" data-tab="${t}">${t === 'semua' ? 'Semua' : t}</div>
+  `).join('');
+  listCamTabsEl.querySelectorAll('.list-cam-tab').forEach(el => {
+    el.addEventListener('click', () => { activeListTab = el.dataset.tab; renderListModal(); });
+  });
+
+  const q = listModalSearch.value.trim().toLowerCase();
+  let filtered = opportunities.filter(op => {
+    const camOk = activeListTab === 'semua' || (op.cams || []).includes(activeListTab);
+    const searchOk = !q || op.name.toLowerCase().includes(q) || (op.address||'').toLowerCase().includes(q) || (op.pic||'').toLowerCase().includes(q);
+    return camOk && searchOk;
+  });
+  filtered.sort((a,b) => {
+    const order = {high:0, medium:1, small:2, existing:3};
+    return (order[a.tier] ?? 9) - (order[b.tier] ?? 9);
+  });
+
+  if (filtered.length === 0) {
+    listModalBody.innerHTML = `<div class="empty-state">Tidak ada titik yang cocok.</div>`;
     return;
   }
-  const sorted = [...opportunities].sort((a,b) => {
-    const order = {high:0, medium:1, small:2};
-    return order[a.tier] - order[b.tier];
-  });
-  sorted.forEach(op => {
+  listModalBody.innerHTML = filtered.map(op => {
     const meta = tierMeta[op.tier];
-    const div = document.createElement('div');
-    div.className = 'item';
-    div.dataset.id = op.id;
-    div.innerHTML = `
-      <div class="item-top">
-        <span class="tier-dot" style="background:${meta.color};"></span>
-        <span class="item-name">${op.name}</span>
+    return `
+      <div class="item" data-id="${op.id}">
+        <div class="item-top">
+          <span class="tier-dot" style="background:${meta.color};"></span>
+          <span class="item-name">${op.name}</span>
+        </div>
+        <div class="item-revenue">${fmtRupiah(op.revenue)}</div>
+        ${op.pic ? `<div class="item-pic">👤 ${op.pic}${op.picPosition ? ' ('+op.picPosition+')' : ''}</div>` : ''}
+        <div class="item-cams">${op.cams.length ? op.cams.join(', ') : 'Belum ada CAM'}</div>
       </div>
-      <div class="item-revenue">${fmtRupiah(op.revenue)}</div>
-      ${op.pic ? `<div class="item-pic">👤 ${op.pic}${op.picPosition ? ' ('+op.picPosition+')' : ''}</div>` : ''}
-      <div class="item-cams">${op.cams.length ? op.cams.join(', ') : 'Belum ada CAM'}</div>
     `;
+  }).join('');
+  listModalBody.querySelectorAll('.item').forEach(div => {
     div.addEventListener('click', () => {
+      const op = opportunities.find(o => o.id === div.dataset.id);
+      if (!op) return;
+      listOverlay.style.display = 'none';
       map.flyTo([op.lat, op.lng], 16, {duration:0.6});
-      markerIndex[op.id].openPopup();
+      setTimeout(() => markerIndex[op.id] && markerIndex[op.id].openPopup(), 650);
     });
-    listEl.appendChild(div);
   });
 }
+
+document.getElementById('open-list-btn').addEventListener('click', () => {
+  listOverlay.style.display = 'flex';
+  renderListModal();
+});
+document.getElementById('list-modal-close').addEventListener('click', () => { listOverlay.style.display = 'none'; });
+listModalSearch.addEventListener('input', renderListModal);
 
 // ============== LIST (ROUTE) ==============
 const routeListEl = document.getElementById('route-list');
