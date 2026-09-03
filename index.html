@@ -996,7 +996,7 @@ styleToggleBtn.addEventListener('click', () => {
 
 // ============== LOKASI SAYA (GPS) ==============
 let myLocationMarker = null, myLocationCircle = null, watchId = null, myCurrentPos = null;
-const MAX_ADD_POINT_DISTANCE_M = 20;
+const MAX_ADD_POINT_DISTANCE_M = 100;
 
 function haversineMeters(lat1, lng1, lat2, lng2){
   const R = 6371000;
