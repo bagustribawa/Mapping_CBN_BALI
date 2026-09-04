@@ -522,7 +522,7 @@
 // KONFIGURASI
 // =========================================================================
 const SHEET_API_URL = "https://script.google.com/macros/s/AKfycby1JWNDMj2CvbkLFL0Vox_Oa8FoZNNeZKKRQXR4TvcMgOjpnhA36odlKDOunJVx7iX9Nw/exec";
-const AUTO_REFRESH_SECONDS = 20;
+const AUTO_REFRESH_SECONDS = 45;
 
 // ============== USER & ROLE ==============
 // Password TIDAK disimpan di sini — dicek server-side lewat sheet "password"
@@ -585,11 +585,11 @@ loginUsers.forEach(u => {
 });
 
 async function apiLogin(username, password){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'login', username, password})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'login', username, password})});
   return await res.json();
 }
 async function apiChangePassword(username, oldPassword, newPassword){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'changePassword', username, oldPassword, newPassword})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'changePassword', username, oldPassword, newPassword})});
   return await res.json();
 }
 
@@ -920,8 +920,23 @@ function showToast(msg){
 }
 
 // ============== API CALLS ==============
+// fetch dengan timeout — supaya kalau server Apps Script sedang macet/kelebihan beban,
+// permintaannya otomatis dibatalkan (bukan nyangkut selamanya di "Memuat data...")
+async function fetchWithTimeout(url, options, timeoutMs = 20000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...(options || {}), signal: controller.signal });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Server terlalu lama merespon (timeout). Coba refresh lagi.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function apiList(){
-  const res = await fetch(SHEET_API_URL + '?action=list&username=' + encodeURIComponent(currentUser.username));
+  const res = await fetchWithTimeout(SHEET_API_URL + '?action=list&username=' + encodeURIComponent(currentUser.username));
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal memuat data');
   const str = (v) => (v === undefined || v === null) ? '' : String(v);
@@ -941,38 +956,38 @@ async function apiList(){
   return { opportunities: ops, routes };
 }
 async function apiAdd(op){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'add', op, username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'add', op, username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal menyimpan');
 }
 async function apiUpdate(op){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'update', op, username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'update', op, username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal update');
 }
 async function apiDelete(id){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'delete', id, username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'delete', id, username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal hapus');
 }
 async function apiAddRoute(route){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addRoute', route, username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addRoute', route, username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal menyimpan jalur');
 }
 async function apiDeleteRoute(id){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'deleteRoute', id, username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'deleteRoute', id, username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal hapus jalur');
 }
 async function apiUploadPhoto(id, base64){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg', username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg', username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal upload foto');
   return json.url;
 }
 async function apiAddActivity(id, date, notes){
-  const res = await fetch(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addActivity', id, date, notes, username: currentUser.username})});
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addActivity', id, date, notes, username: currentUser.username})});
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal menyimpan kunjungan');
   return json;
@@ -1218,6 +1233,7 @@ function popupHtml(op){
   const creatorRow = op.createdBy ? `<div class="popup-row" style="color:var(--muted);">🖊 Dibuat oleh: ${getDisplayName(op.createdBy)}</div>` : '';
   const editBtn = canEditOp(op) ? `<button class="btn-edit" data-edit="${op.id}">✎ Edit</button>` : '';
   const activityBtn = canEditOp(op) ? `<button class="btn-edit" data-activity="${op.id}">🕒 Update Kunjungan</button>` : '';
+  const proposalBtn = `<button class="btn-edit" data-proposal="${op.id}">📄 Buat Proposal</button>`;
   const deleteBtn = isAdmin() ? `<button class="btn-delete" data-del="${op.id}">🗑 Hapus</button>` : '';
   const noPermRow = (!editBtn && !deleteBtn) ? `<div class="popup-row" style="color:var(--muted);font-style:italic;">Hanya pembuat titik ini atau Administrator yang bisa mengubahnya.</div>` : '';
 
@@ -1249,6 +1265,7 @@ function popupHtml(op){
     ${creatorRow}
     <div class="popup-row" style="font-weight:700;color:var(--text);margin-top:8px;">CAM Handle:</div>
     <div class="popup-cams">${camPills || '<span style="color:var(--muted);font-size:11.5px;">Belum ada CAM ditugaskan</span>'}</div>
+    <div class="popup-actions">${proposalBtn}</div>
     ${(editBtn || deleteBtn || activityBtn) ? `<div class="popup-actions">${activityBtn}${editBtn}${deleteBtn}</div>` : noPermRow}
   `;
 }
@@ -1261,8 +1278,10 @@ function bindMarker(op){
     const editBtn = el.querySelector(`[data-edit="${op.id}"]`);
     const delBtn = el.querySelector(`[data-del="${op.id}"]`);
     const activityBtn = el.querySelector(`[data-activity="${op.id}"]`);
+    const proposalBtn = el.querySelector(`[data-proposal="${op.id}"]`);
     if (editBtn) editBtn.addEventListener('click', () => openForm(op));
     if (activityBtn) activityBtn.addEventListener('click', () => openActivityForm(op));
+    if (proposalBtn) proposalBtn.addEventListener('click', () => openProposalGenerator(op));
     if (delBtn) delBtn.addEventListener('click', async () => {
       if (!isAdmin()) { showToast('Hanya Administrator yang bisa menghapus titik.'); return; }
       if (!confirm(`Hapus titik "${op.name}"?`)) return;
@@ -1282,6 +1301,20 @@ function bindMarker(op){
 
 // ============== UPDATE KUNJUNGAN (activity log) ==============
 let activityTargetOp = null;
+// ============== BUAT PROPOSAL (buka Proposal_Generator.html di tab baru, data ter-isi otomatis) ==============
+function openProposalGenerator(op){
+  const params = new URLSearchParams({
+    company: op.name || '',
+    pic: op.pic || '',
+    picTitle: op.picPosition || '',
+    phone: op.picPhone || '',
+    email: op.email || '',
+    address: op.address || '',
+    industry: op.industry || '',
+  });
+  window.open('Proposal_Generator.html?' + params.toString(), '_blank');
+}
+
 function openActivityForm(op){
   activityTargetOp = op;
   document.getElementById('activity-date').value = new Date().toISOString().slice(0, 10);
