@@ -1020,7 +1020,10 @@ async function apiList(){
   return { opportunities: ops, routes };
 }
 async function apiAdd(op){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'add', op, username: currentUser.username})});
+  // Timeout dinaikkan jadi 40 detik (bukan default 20 detik) — action 'add' sering
+  // langsung disusul upload foto, dan kalau sinyal di lapangan lagi lemah, 20 detik
+  // suka kepotong duluan padahal sebenarnya cuma butuh waktu sedikit lebih lama.
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'add', op, username: currentUser.username})}, 40000);
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal menyimpan');
 }
@@ -1045,7 +1048,10 @@ async function apiDeleteRoute(id){
   if (!json.ok) throw new Error(json.error || 'Gagal hapus jalur');
 }
 async function apiUploadPhoto(id, base64){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg', username: currentUser.username})});
+  // Timeout dinaikkan jadi 60 detik — ini action paling berat (kirim payload foto +
+  // DriveApp membuat file & setSharing, yang di Apps Script memang sering lambat
+  // beberapa detik sendiri di luar waktu jaringan).
+  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg', username: currentUser.username})}, 60000);
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal upload foto');
   return json.url;
