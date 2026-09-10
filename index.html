@@ -138,7 +138,7 @@
   .popup-actions button{flex:1;font-size:11.5px;padding:7px;border-radius:7px;border:none;cursor:pointer;font-weight:700;}
   .btn-edit{background:var(--panel2);color:var(--text);border:1px solid var(--border) !important;}
   .btn-delete{background:#ef444422;color:#ef4444;}
-  #form-overlay,#route-form-overlay,#login-overlay,#password-overlay,#export-overlay,#mom-export-overlay,#activity-form-overlay{position:absolute;inset:0;background:rgba(6,10,16,.55);z-index:900;display:none;align-items:center;justify-content:center;}
+  #form-overlay,#route-form-overlay,#login-overlay,#password-overlay,#export-overlay,#mom-export-overlay,#activity-form-overlay{position:absolute;inset:0;background:rgba(6,10,16,.55);z-index:1500;display:none;align-items:center;justify-content:center;}
   #login-overlay{z-index:2000;background:var(--bg);display:flex;}
   #form-card,#route-form-card,#login-card,#password-card,#export-card,#mom-export-card,#activity-form-card{width:360px;max-width:92vw;max-height:88vh;overflow-y:auto;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;filter:none;}
   #login-card{text-align:left;}
@@ -400,7 +400,7 @@
     <div class="f-label">Zip Code</div>
     <input type="text" class="f-input" id="f-zipcode" placeholder="cth: 80361" inputmode="numeric">
 
-    <div class="f-label">📷 Foto Evidence (opsional)</div>
+    <div class="f-label" id="f-photo-label">📷 Foto Evidence (wajib)</div>
     <input type="file" class="f-input" id="f-photo" accept="image/*" capture="environment">
     <div id="f-photo-preview" style="margin-top:8px;"></div>
 
@@ -1501,7 +1501,11 @@ addBtn.addEventListener('click', () => {
   addHint.textContent = addingMode ? `🎯 Klik lokasi di peta (maks ${MAX_ADD_POINT_DISTANCE_M}m dari posisi kamu)` : '';
   addHint.style.display = addingMode ? 'block' : 'none';
   mapEl.classList.toggle('adding', addingMode);
-  if (addingMode) toggleSidebar(false); // tutup panel di mobile biar bisa tap peta
+  if (addingMode) {
+    toggleSidebar(false); // tutup panel bottom-sheet di mobile biar bisa tap peta
+    document.getElementById('list-overlay').style.display = 'none'; // tutup modal Daftar Titik kalau kebetulan masih terbuka
+    document.getElementById('export-choice-overlay').style.display = 'none';
+  }
 });
 
 // ============== ROUTE DRAWING MODE ==============
@@ -1538,7 +1542,9 @@ function startRouteDrawing(){
   routeBtn.textContent = '✕ Batal';
   routePanel.style.display = 'flex';
   mapEl.classList.add('routing');
-  toggleSidebar(false); // tutup panel di mobile biar bisa tap peta
+  toggleSidebar(false); // tutup panel bottom-sheet di mobile biar bisa tap peta
+  document.getElementById('list-overlay').style.display = 'none';
+  document.getElementById('export-choice-overlay').style.display = 'none';
 }
 
 function cancelRouteDrawing(){
@@ -1681,6 +1687,9 @@ function selectTier(key){
 let selectedPhotoFile = null;
 
 function openForm(existingOp){
+  toggleSidebar(false);
+  document.getElementById('list-overlay').style.display = 'none';
+  document.getElementById('export-choice-overlay').style.display = 'none';
   editingId = existingOp ? existingOp.id : null;
   document.getElementById('form-title').textContent = existingOp ? 'Edit Titik Opportunity' : 'Tambah Titik Opportunity';
   document.getElementById('f-name').value = existingOp ? existingOp.name : '';
@@ -1702,6 +1711,7 @@ function openForm(existingOp){
   document.getElementById('f-mom-others').value = existingOp ? (existingOp.momOthers || '') : '';
   document.getElementById('f-photo').value = '';
   selectedPhotoFile = null;
+  document.getElementById('f-photo-label').textContent = existingOp ? '📷 Foto Evidence (opsional, boleh ganti)' : '📷 Foto Evidence (wajib)';
   const previewEl = document.getElementById('f-photo-preview');
   previewEl.innerHTML = existingOp && existingOp.photoUrl
     ? `<a href="${existingOp.photoUrl}" target="_blank" style="color:var(--accent);font-size:11.5px;">📷 Lihat foto yang sudah ada tersimpan</a>`
@@ -1764,6 +1774,7 @@ document.getElementById('f-save').addEventListener('click', async () => {
   const momOthers = document.getElementById('f-mom-others').value.trim();
   if (!name) { alert('Nama hotel/villa wajib diisi.'); return; }
   if (!revenue) { alert('Potensi revenue wajib diisi.'); return; }
+  if (!editingId && !selectedPhotoFile) { alert('Foto evidence wajib diisi untuk titik baru — silakan ambil/upload foto dulu.'); return; }
 
   const saveBtn = document.getElementById('f-save');
   saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
