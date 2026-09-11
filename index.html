@@ -622,8 +622,7 @@ function activateSession(user){
   const pill = document.getElementById('user-role-pill');
   pill.textContent = isAdmin() ? 'Administrator' : 'CAM';
   pill.className = 'role-pill ' + (isAdmin() ? 'admin' : 'cam');
-  loadAndRender(false);
-  if (isConfigured) setInterval(() => loadAndRender(false), AUTO_REFRESH_SECONDS * 1000);
+  startRealtimeSync();
 }
 
 async function doLogin(){
@@ -928,6 +927,7 @@ document.getElementById('export-confirm').addEventListener('click', () => {
     'Alamat': op.address || '-',
     'Dibuat Oleh': getDisplayName(op.createdBy),
     'Tanggal Dibuat': op.createdAt ? new Date(op.createdAt).toLocaleDateString('id-ID') : '-',
+    'Foto Evidence (URL)': op.photoUrl || '-',
   }));
 
   const routeRows = filteredRoutes.map((r, i) => ({
@@ -950,18 +950,20 @@ document.getElementById('export-confirm').addEventListener('click', () => {
     'Gender': op.gender || '',
     'Mobile Number': op.picPhone || '',
     'Email': op.email || '',
+    'Tier': tierMeta[op.tier] ? tierMeta[op.tier].label : op.tier,
     'Longitude Latitude': `${op.lng}, ${op.lat}`,
     'Provinsi': op.provinsi || '',
     'Kota / Kabupaten': op.kota || '',
     'Zip code': op.zipcode || '',
+    'Foto Evidence (URL)': op.photoUrl || '',
   }));
   const wsCrm = XLSX.utils.json_to_sheet(crmRows.length ? crmRows : [{ 'Keterangan': 'Tidak ada titik pada rentang tanggal ini' }]);
-  wsCrm['!cols'] = [{wch:20},{wch:28},{wch:22},{wch:16},{wch:12},{wch:16},{wch:24},{wch:24},{wch:14},{wch:18},{wch:10}];
+  wsCrm['!cols'] = [{wch:20},{wch:28},{wch:22},{wch:16},{wch:12},{wch:16},{wch:24},{wch:9},{wch:24},{wch:14},{wch:18},{wch:10},{wch:40}];
   XLSX.utils.book_append_sheet(wb, wsCrm, 'Neo CRM Format');
 
   // ---------- Sheet 2: Opportunity (detail lengkap untuk analisa internal) ----------
   const wsOp = XLSX.utils.json_to_sheet(opRows.length ? opRows : [{ 'Keterangan': 'Tidak ada titik opportunity pada rentang tanggal ini' }]);
-  wsOp['!cols'] = [{wch:4},{wch:28},{wch:20},{wch:16},{wch:16},{wch:9},{wch:20},{wch:26},{wch:32},{wch:24},{wch:14}];
+  wsOp['!cols'] = [{wch:4},{wch:28},{wch:20},{wch:16},{wch:16},{wch:9},{wch:20},{wch:26},{wch:32},{wch:24},{wch:14},{wch:40}];
   // format kolom revenue sebagai angka ribuan, tetap numerik untuk dianalisa
   opRows.forEach((_, i) => {
     const ref = XLSX.utils.encode_cell({ r: i + 1, c: 6 });
@@ -2061,34 +2063,83 @@ function renderRouteList(){
 }
 
 // ============== LOAD / REFRESH ==============
-async function loadAndRender(showLoadingToast){
+// ============== SINKRONISASI REAL-TIME (hemat kuota Firestore) ==============
+// Dulu di sini ada polling setiap 45 detik yang baca ULANG semua dokumen setiap
+// kali — itu yang bikin kuota baca cepat habis kalau banyak CAM buka bersamaan.
+// Sekarang pakai onSnapshot: biaya baca cuma sekali di awal, setelahnya Firestore
+// cuma kirim perubahan yang beneran terjadi (jauh lebih hemat & lebih cepat).
+let unsubOpportunities = null;
+let unsubRoutes = null;
+let opsSyncReady = false, routesSyncReady = false;
+
+function rerenderFromState(){
+  Object.values(markerIndex).forEach(m => map.removeLayer(m));
+  Object.keys(markerIndex).forEach(k => delete markerIndex[k]);
+  Object.values(routeLineIndex).forEach(l => map.removeLayer(l));
+  Object.keys(routeLineIndex).forEach(k => delete routeLineIndex[k]);
+  opportunities.forEach(bindMarker);
+  canvassRoutes.forEach(bindRouteLine);
+  renderList(); applyFilters();
+  renderRouteList(); applyRouteFilters();
+}
+
+function startRealtimeSync(){
   if (!isConfigured) { setConnStatus('err', 'Belum dikonfigurasi'); return; }
-  setConnStatus('', 'Memuat data...');
-  try {
-    const fresh = await apiList();
-    Object.values(markerIndex).forEach(m => map.removeLayer(m));
-    Object.keys(markerIndex).forEach(k => delete markerIndex[k]);
-    Object.values(routeLineIndex).forEach(l => map.removeLayer(l));
-    Object.keys(routeLineIndex).forEach(k => delete routeLineIndex[k]);
+  setConnStatus('', 'Menyambungkan...');
+  if (unsubOpportunities) unsubOpportunities();
+  if (unsubRoutes) unsubRoutes();
+  opsSyncReady = false; routesSyncReady = false;
 
-    opportunities = fresh.opportunities;
-    canvassRoutes = fresh.routes;
-    opportunities.forEach(bindMarker);
-    canvassRoutes.forEach(bindRouteLine);
+  const str = (v) => (v === undefined || v === null) ? '' : String(v);
+  const maybeRerender = () => {
+    if (!opsSyncReady || !routesSyncReady) return; // tunggu keduanya siap biar tidak render setengah data
+    rerenderFromState();
+    setConnStatus('ok', 'Tersambung ke Firestore (real-time)');
+  };
 
-    renderList(); applyFilters();
-    renderRouteList(); applyRouteFilters();
-    setConnStatus('ok', 'Tersambung ke Firestore');
-    if (showLoadingToast) showToast('Data diperbarui.');
-  } catch (err) {
+  unsubOpportunities = db.collection('opportunities').onSnapshot((snap) => {
+    opportunities = snap.docs.map(docSnap => {
+      const o = docSnap.data();
+      return {
+        ...o, id: docSnap.id,
+        revenue: Number(o.revenue) || 0, lat: Number(o.lat), lng: Number(o.lng),
+        pic: str(o.pic), picPhone: str(o.picPhone), picPosition: str(o.picPosition),
+        address: str(o.address), name: str(o.name), createdBy: str(o.createdBy),
+        industry: str(o.industry), gender: str(o.gender), email: str(o.email),
+        provinsi: str(o.provinsi), kota: str(o.kota), zipcode: str(o.zipcode), photoUrl: str(o.photoUrl),
+        momExisting: str(o.momExisting), momBandwidth: str(o.momBandwidth), momContract: str(o.momContract), momOthers: str(o.momOthers),
+        momBudget: Number(o.momBudget) || 0,
+        cams: Array.isArray(o.cams) ? o.cams : [],
+        activityLog: Array.isArray(o.activityLog) ? o.activityLog : [],
+      };
+    });
+    opsSyncReady = true;
+    maybeRerender();
+  }, (err) => {
     setConnStatus('err', 'Gagal tersambung');
-    showToast('Gagal memuat data: ' + err.message);
-  }
+    showToast('Gagal memuat data opportunity: ' + err.message);
+  });
+
+  unsubRoutes = db.collection('routes').onSnapshot((snap) => {
+    canvassRoutes = snap.docs.map(docSnap => {
+      const r = docSnap.data();
+      return { ...r, id: docSnap.id, points: Array.isArray(r.points) ? r.points.map(p => [Number(p.lat), Number(p.lng)]) : [] };
+    });
+    routesSyncReady = true;
+    maybeRerender();
+  }, (err) => {
+    setConnStatus('err', 'Gagal tersambung');
+    showToast('Gagal memuat data jalur: ' + err.message);
+  });
 }
 
 document.getElementById('refresh-btn').addEventListener('click', (e) => {
+  // Data sudah real-time otomatis — tombol ini sekarang cuma render ulang dari
+  // data yang sudah ada di memori (tanpa baca ulang ke Firestore, jadi gratis).
   e.target.classList.add('spinning');
-  loadAndRender(true).finally(() => setTimeout(() => e.target.classList.remove('spinning'), 800));
+  rerenderFromState();
+  showToast('Data sudah real-time — selalu update otomatis.');
+  setTimeout(() => e.target.classList.remove('spinning'), 800);
 });
 
 // Kalau ada sesi tersimpan dari login sebelumnya (di tab ini), langsung masuk tanpa perlu login ulang.
