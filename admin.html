@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin — Edit Data Opportunity</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background:#0f1420; color:#e5e7eb; margin:0; padding:16px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:#94a3b8; font-size:13px; margin-bottom:14px; }
+  .warn-box { background:#3a1d1d; border:1px solid #7f1d1d; padding:10px 12px; border-radius:8px; margin-bottom:14px; font-size:13px; }
+  .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+  input#search { background:#1c2333; border:1px solid #334155; color:#e5e7eb; padding:8px 10px; border-radius:6px; font-size:13px; width:260px; }
+  button { background:#14b8a6; color:#04201c; border:none; padding:9px 16px; border-radius:6px; font-weight:600; cursor:pointer; font-size:13px; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+  button.secondary { background:#334155; color:#e5e7eb; }
+  #status { font-size:13px; color:#93c5fd; }
+  #status.err { color:#f87171; }
+  #status.ok { color:#4ade80; }
+  .table-wrap { overflow:auto; max-height:78vh; border:1px solid #1f2937; border-radius:8px; }
+  table { border-collapse:collapse; font-size:12.5px; min-width:1800px; }
+  th, td { border:1px solid #1f2937; padding:4px 6px; text-align:left; white-space:nowrap; }
+  th { background:#141a29; position:sticky; top:0; z-index:2; font-weight:600; color:#cbd5e1; }
+  td.id-cell, th.id-col { position:sticky; left:0; background:#0f1420; z-index:1; color:#64748b; }
+  th.id-col { z-index:3; }
+  tr.dirty td { background:#1a2a1f; }
+  tr.dirty td.id-cell { background:#16281c; }
+  input.cell, select.cell { background:transparent; border:1px solid transparent; color:#e5e7eb; width:100%; min-width:90px; font-size:12.5px; padding:3px 4px; border-radius:4px; }
+  input.cell:focus, select.cell:focus { border-color:#14b8a6; background:#0a0e17; outline:none; }
+  input.cell[type=number] { width:90px; }
+  a.photo-link { color:#5eead4; }
+  .readonly { color:#64748b; font-size:12px; }
+</style>
+</head>
+<body>
+  <h1>📊 Edit Data Opportunity (Firestore)</h1>
+  <div class="sub">Edit langsung di tabel seperti spreadsheet, lalu klik "Simpan Semua Perubahan". Baris yang diedit ditandai hijau sampai disimpan.</div>
+  <div class="warn-box">
+    ⚠️ Halaman admin ini sebaiknya tidak dibagikan/di-link publik. Perubahan di sini langsung menimpa data asli di Firestore.
+  </div>
+  <div class="toolbar">
+    <input id="search" placeholder="Cari nama / PIC / kota...">
+    <button id="btnReload" class="secondary">🔄 Muat Ulang</button>
+    <button id="btnSave" disabled>💾 Simpan Semua Perubahan (<span id="dirtyCount">0</span>)</button>
+    <span id="status"></span>
+  </div>
+  <div class="table-wrap">
+    <table id="tbl">
+      <thead>
+        <tr id="theadRow"></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    // ---------- KONFIGURASI ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyDz-ym75cvK8Eh86UMT5g97wLWaYu8mHhg",
+      authDomain: "cam-mapping-bali.firebaseapp.com",
+      projectId: "cam-mapping-bali",
+      storageBucket: "cam-mapping-bali.firebasestorage.app",
+      messagingSenderId: "538750983025",
+      appId: "1:538750983025:web:c0b0c8ae72a884364b74d0",
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Kolom yang ditampilkan & bisa diedit. type menentukan input yang dipakai.
+    const EDITABLE_COLUMNS = [
+      { key: 'name', label: 'Nama', type: 'text' },
+      { key: 'tier', label: 'Tier', type: 'select', options: ['small','medium','high','existing'] },
+      { key: 'industry', label: 'Industry', type: 'select', options: ['Hotels','Hospital','University','School','Retail','Villa','Corporate/Office','Internet Providers & Telecommunications','Government','Other'] },
+      { key: 'revenue', label: 'Revenue', type: 'number' },
+      { key: 'pic', label: 'PIC', type: 'text' },
+      { key: 'picPosition', label: 'Jabatan PIC', type: 'text' },
+      { key: 'picPhone', label: 'No HP PIC', type: 'text' },
+      { key: 'email', label: 'Email', type: 'text' },
+      { key: 'gender', label: 'Gender', type: 'select', options: ['Laki-laki','Perempuan'] },
+      { key: 'address', label: 'Alamat', type: 'text' },
+      { key: 'provinsi', label: 'Provinsi', type: 'text' },
+      { key: 'kota', label: 'Kota', type: 'text' },
+      { key: 'zipcode', label: 'Zipcode', type: 'text' },
+      { key: 'momExisting', label: 'MOM: Existing', type: 'text' },
+      { key: 'momBudget', label: 'MOM: Budget', type: 'number' },
+      { key: 'momBandwidth', label: 'MOM: Bandwidth', type: 'text' },
+      { key: 'momContract', label: 'MOM: Contract', type: 'text' },
+      { key: 'momOthers', label: 'MOM: Lainnya', type: 'text' },
+      { key: 'cams', label: 'CAM (pisah koma)', type: 'array' },
+      { key: 'lat', label: 'Lat', type: 'number' },
+      { key: 'lng', label: 'Lng', type: 'number' },
+    ];
+
+    let rows = []; // { id, original: {...}, current: {...} }
+    const dirtyIds = new Set();
+
+    function buildHeader() {
+      const thead = document.getElementById('theadRow');
+      thead.innerHTML = '';
+      const thId = document.createElement('th');
+      thId.textContent = 'ID';
+      thId.className = 'id-col';
+      thead.appendChild(thId);
+      EDITABLE_COLUMNS.forEach(col => {
+        const th = document.createElement('th');
+        th.textContent = col.label;
+        thead.appendChild(th);
+      });
+      const thPhoto = document.createElement('th');
+      thPhoto.textContent = 'Foto';
+      thead.appendChild(thPhoto);
+      const thMeta = document.createElement('th');
+      thMeta.textContent = 'Dibuat oleh';
+      thead.appendChild(thMeta);
+    }
+
+    function cellInput(row, col) {
+      const val = row.current[col.key];
+      if (col.type === 'select') {
+        const sel = document.createElement('select');
+        sel.className = 'cell';
+        const blankOpt = document.createElement('option');
+        blankOpt.value = ''; blankOpt.textContent = '--';
+        sel.appendChild(blankOpt);
+        col.options.forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o; opt.textContent = o;
+          if (o === val) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener('change', () => onCellChange(row, col.key, sel.value));
+        return sel;
+      }
+      const input = document.createElement('input');
+      input.className = 'cell';
+      if (col.type === 'number') {
+        input.type = 'number';
+        input.value = (val === undefined || val === null || Number.isNaN(val)) ? '' : val;
+      } else if (col.type === 'array') {
+        input.type = 'text';
+        input.value = Array.isArray(val) ? val.join(', ') : '';
+      } else {
+        input.type = 'text';
+        input.value = val || '';
+      }
+      input.addEventListener('change', () => {
+        let newVal = input.value;
+        if (col.type === 'number') newVal = newVal === '' ? 0 : Number(newVal);
+        if (col.type === 'array') newVal = newVal.split(',').map(s => s.trim()).filter(Boolean);
+        onCellChange(row, col.key, newVal);
+      });
+      return input;
+    }
+
+    function onCellChange(row, key, newVal) {
+      row.current[key] = newVal;
+      dirtyIds.add(row.id);
+      renderRowDirtyState(row);
+      updateSaveButton();
+    }
+
+    function renderRowDirtyState(row) {
+      const tr = document.getElementById('row-' + row.id);
+      if (tr) tr.classList.toggle('dirty', dirtyIds.has(row.id));
+    }
+
+    function updateSaveButton() {
+      document.getElementById('dirtyCount').textContent = dirtyIds.size;
+      document.getElementById('btnSave').disabled = dirtyIds.size === 0;
+    }
+
+    function renderRows(filterText) {
+      const tbody = document.getElementById('tbody');
+      tbody.innerHTML = '';
+      const q = (filterText || '').toLowerCase();
+      rows.forEach(row => {
+        const haystack = (row.current.name + ' ' + row.current.pic + ' ' + row.current.kota).toLowerCase();
+        if (q && !haystack.includes(q)) return;
+
+        const tr = document.createElement('tr');
+        tr.id = 'row-' + row.id;
+        if (dirtyIds.has(row.id)) tr.classList.add('dirty');
+
+        const tdId = document.createElement('td');
+        tdId.textContent = row.id;
+        tdId.className = 'id-cell';
+        tr.appendChild(tdId);
+
+        EDITABLE_COLUMNS.forEach(col => {
+          const td = document.createElement('td');
+          td.appendChild(cellInput(row, col));
+          tr.appendChild(td);
+        });
+
+        const tdPhoto = document.createElement('td');
+        if (row.current.photoUrl) {
+          const a = document.createElement('a');
+          a.href = row.current.photoUrl; a.target = '_blank'; a.className = 'photo-link'; a.textContent = 'Lihat';
+          tdPhoto.appendChild(a);
+        } else {
+          tdPhoto.textContent = '-';
+        }
+        tr.appendChild(tdPhoto);
+
+        const tdMeta = document.createElement('td');
+        tdMeta.className = 'readonly';
+        tdMeta.textContent = row.current.createdBy || '-';
+        tr.appendChild(tdMeta);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function setStatus(msg, cls) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = cls || '';
+    }
+
+    async function loadData() {
+      setStatus('Memuat data...', '');
+      document.getElementById('btnReload').disabled = true;
+      try {
+        const snap = await db.collection('opportunities').get();
+        rows = snap.docs.map(docSnap => {
+          const data = docSnap.data();
+          return { id: docSnap.id, current: { ...data } };
+        });
+        rows.sort((a, b) => (a.current.name || '').localeCompare(b.current.name || ''));
+        dirtyIds.clear();
+        updateSaveButton();
+        renderRows(document.getElementById('search').value);
+        setStatus(`Termuat ${rows.length} opportunity.`, 'ok');
+      } catch (err) {
+        setStatus('Gagal memuat: ' + err.message, 'err');
+      }
+      document.getElementById('btnReload').disabled = false;
+    }
+
+    async function saveChanges() {
+      if (dirtyIds.size === 0) return;
+      document.getElementById('btnSave').disabled = true;
+      setStatus(`Menyimpan ${dirtyIds.size} perubahan...`, '');
+      try {
+        const ids = Array.from(dirtyIds);
+        // Firestore batch maksimal 500 operasi — aman untuk skala data kita, tapi tetap dipecah untuk jaga-jaga.
+        for (let i = 0; i < ids.length; i += 400) {
+          const batch = db.batch();
+          const chunk = ids.slice(i, i + 400);
+          chunk.forEach(id => {
+            const row = rows.find(r => r.id === id);
+            if (!row) return;
+            const ref = db.collection('opportunities').doc(id);
+            batch.set(ref, row.current, { merge: true });
+          });
+          await batch.commit();
+        }
+        dirtyIds.clear();
+        updateSaveButton();
+        renderRows(document.getElementById('search').value);
+        setStatus('✅ Semua perubahan tersimpan.', 'ok');
+      } catch (err) {
+        setStatus('Gagal menyimpan: ' + err.message, 'err');
+        document.getElementById('btnSave').disabled = false;
+      }
+    }
+
+    document.getElementById('search').addEventListener('input', (e) => renderRows(e.target.value));
+    document.getElementById('btnReload').addEventListener('click', () => {
+      if (dirtyIds.size > 0 && !confirm('Ada perubahan belum disimpan, muat ulang tetap lanjut dan perubahan akan hilang?')) return;
+      loadData();
+    });
+    document.getElementById('btnSave').addEventListener('click', saveChanges);
+
+    buildHeader();
+    loadData();
+  </script>
+</body>
+</html>
