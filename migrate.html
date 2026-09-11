@@ -69,6 +69,17 @@
       } catch (e) { return []; }
     }
 
+    // Firestore tidak mendukung array di dalam array. Kalau titik rute
+    // tersimpan sebagai [lat, lng] (array 2 elemen), ubah jadi {lat, lng}.
+    function normalizePoints(raw) {
+      const arr = safeParseArray(raw);
+      return arr.map(pt => {
+        if (Array.isArray(pt)) return { lat: Number(pt[0]), lng: Number(pt[1]) };
+        if (pt && typeof pt === 'object') return { lat: Number(pt.lat), lng: Number(pt.lng) };
+        return { lat: 0, lng: 0 };
+      });
+    }
+
     async function migrate() {
       document.getElementById('btnStart').disabled = true;
       log('Mengambil data dari Apps Script lama...', 'info');
@@ -141,7 +152,7 @@
           const docData = {
             team: r.team || '',
             color: r.color || '',
-            points: safeParseArray(r.points),
+            points: normalizePoints(r.points),
             note: r.note || '',
             createdBy: (r.createdBy || '').toLowerCase(),
             createdAt: r.createdAt || new Date().toISOString(),
