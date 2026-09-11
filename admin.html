@@ -43,6 +43,11 @@
   </div>
   <div class="toolbar">
     <input id="search" placeholder="Cari nama / PIC / kota...">
+    <select id="idFilter" class="cell" style="width:auto; min-width:220px; background:#1c2333; border:1px solid #334155;">
+      <option value="all">Semua ID</option>
+      <option value="op_">Cuma ID mulai "op_" (opportunity baru dari app)</option>
+      <option value="other">Cuma ID lainnya (existing/hotel list)</option>
+    </select>
     <button id="btnReload" class="secondary">🔄 Muat Ulang</button>
     <button id="btnSave" disabled>💾 Simpan Semua Perubahan (<span id="dirtyCount">0</span>)</button>
     <span id="status"></span>
@@ -176,9 +181,14 @@
       const tbody = document.getElementById('tbody');
       tbody.innerHTML = '';
       const q = (filterText || '').toLowerCase();
+      const idFilter = document.getElementById('idFilter').value;
+      let shown = 0;
       rows.forEach(row => {
+        if (idFilter === 'op_' && !row.id.startsWith('op_')) return;
+        if (idFilter === 'other' && row.id.startsWith('op_')) return;
         const haystack = (row.current.name + ' ' + row.current.pic + ' ' + row.current.kota).toLowerCase();
         if (q && !haystack.includes(q)) return;
+        shown++;
 
         const tr = document.createElement('tr');
         tr.id = 'row-' + row.id;
@@ -212,6 +222,7 @@
 
         tbody.appendChild(tr);
       });
+      setStatus(`Menampilkan ${shown} dari ${rows.length} opportunity.`, 'ok');
     }
 
     function setStatus(msg, cls) {
@@ -233,7 +244,6 @@
         dirtyIds.clear();
         updateSaveButton();
         renderRows(document.getElementById('search').value);
-        setStatus(`Termuat ${rows.length} opportunity.`, 'ok');
       } catch (err) {
         setStatus('Gagal memuat: ' + err.message, 'err');
       }
@@ -269,6 +279,7 @@
     }
 
     document.getElementById('search').addEventListener('input', (e) => renderRows(e.target.value));
+    document.getElementById('idFilter').addEventListener('change', () => renderRows(document.getElementById('search').value));
     document.getElementById('btnReload').addEventListener('click', () => {
       if (dirtyIds.size > 0 && !confirm('Ada perubahan belum disimpan, muat ulang tetap lanjut dan perubahan akan hilang?')) return;
       loadData();
