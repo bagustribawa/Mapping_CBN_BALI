@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#0f1720; --panel:#152030; --panel2:#1b2838; --border:#2a3a4d;
@@ -513,9 +515,9 @@
 <div id="setup-banner">
   <div id="setup-card">
     <h2>⚙️ Belum dikonfigurasi</h2>
-    <p>File ini belum tersambung ke Google Sheets. Buka file HTML ini dengan text editor, cari baris:</p>
-    <p><code>const SHEET_API_URL = "PASTE_URL_WEB_APP_DI_SINI";</code></p>
-    <p>Ganti dengan URL Web App hasil deploy Apps Script (diakhiri <code>/exec</code>), simpan file, lalu buka lagi.</p>
+    <p>File ini belum tersambung ke Apps Script (untuk login & foto). Buka file HTML ini dengan text editor, cari baris:</p>
+    <p><code>const AUTH_PHOTO_API_URL = "PASTE_URL_WEB_APP_DI_SINI";</code></p>
+    <p>Ganti dengan URL Web App hasil deploy AppsScript-PhotoUpload.gs (diakhiri <code>/exec</code>), simpan file, lalu buka lagi.</p>
   </div>
 </div>
 
@@ -523,8 +525,23 @@
 // =========================================================================
 // KONFIGURASI
 // =========================================================================
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycby1JWNDMj2CvbkLFL0Vox_Oa8FoZNNeZKKRQXR4TvcMgOjpnhA36odlKDOunJVx7iX9Nw/exec";
+// URL Apps Script yang BARU (AppsScript-PhotoUpload.gs) — dipakai HANYA untuk
+// login, ganti password, dan upload foto. Data opportunity/rute TIDAK lagi
+// lewat sini, semua langsung ke Firestore di bawah.
+const AUTH_PHOTO_API_URL = "https://script.google.com/macros/s/AKfycbxIA72fW08TV84h8yPbGxZXpRBKhuiu3OHHboW2xt4_JK_s3ozZowL1QEieaImr-Gtf/exec";
 const AUTO_REFRESH_SECONDS = 45;
+
+// Konfigurasi Firebase — data opportunity & rute sekarang di Firestore.
+const firebaseConfig = {
+  apiKey: "AIzaSyDz-ym75cvK8Eh86UMT5g97wLWaYu8mHhg",
+  authDomain: "cam-mapping-bali.firebaseapp.com",
+  projectId: "cam-mapping-bali",
+  storageBucket: "cam-mapping-bali.firebasestorage.app",
+  messagingSenderId: "538750983025",
+  appId: "1:538750983025:web:c0b0c8ae72a884364b74d0",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 // ============== USER & ROLE ==============
 // Password TIDAK disimpan di sini — dicek server-side lewat sheet "password"
@@ -571,7 +588,7 @@ const tierMeta = {
 
 let opportunities = [];
 let canvassRoutes = [];
-const isConfigured = SHEET_API_URL && SHEET_API_URL.indexOf('PASTE_URL') === -1;
+const isConfigured = AUTH_PHOTO_API_URL && AUTH_PHOTO_API_URL.indexOf('PASTE_URL') === -1;
 
 if (!isConfigured) {
   document.getElementById('setup-banner').style.display = 'flex';
@@ -587,11 +604,11 @@ loginUsers.forEach(u => {
 });
 
 async function apiLogin(username, password){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'login', username, password})});
+  const res = await fetchWithTimeout(AUTH_PHOTO_API_URL, {method:'POST', body: JSON.stringify({action:'login', username, password})});
   return await res.json();
 }
 async function apiChangePassword(username, oldPassword, newPassword){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'changePassword', username, oldPassword, newPassword})});
+  const res = await fetchWithTimeout(AUTH_PHOTO_API_URL, {method:'POST', body: JSON.stringify({action:'changePassword', username, oldPassword, newPassword})});
   return await res.json();
 }
 
@@ -1000,67 +1017,77 @@ async function fetchWithTimeout(url, options, timeoutMs = 20000){
 }
 
 async function apiList(){
-  const res = await fetchWithTimeout(SHEET_API_URL + '?action=list&username=' + encodeURIComponent(currentUser.username));
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal memuat data');
   const str = (v) => (v === undefined || v === null) ? '' : String(v);
-  const ops = (json.opportunities || []).map(o => ({
-    ...o,
-    revenue: Number(o.revenue), lat: Number(o.lat), lng: Number(o.lng),
-    // Google Sheets suka otomatis mengubah teks angka-saja (mis. no HP) jadi tipe number —
-    // paksa balik ke string di sini supaya .replace() dkk tidak pernah error.
-    pic: str(o.pic), picPhone: str(o.picPhone), picPosition: str(o.picPosition),
-    address: str(o.address), name: str(o.name), createdBy: str(o.createdBy),
-    industry: str(o.industry), gender: str(o.gender), email: str(o.email),
-    provinsi: str(o.provinsi), kota: str(o.kota), zipcode: str(o.zipcode), photoUrl: str(o.photoUrl),
-    momExisting: str(o.momExisting), momBandwidth: str(o.momBandwidth), momContract: str(o.momContract), momOthers: str(o.momOthers),
-    momBudget: Number(o.momBudget) || 0,
-  }));
-  const routes = (json.routes || []).map(r => ({...r, points: Array.isArray(r.points) ? r.points : JSON.parse(r.points || '[]')}));
+  const [opsSnap, routesSnap] = await Promise.all([
+    db.collection('opportunities').get(),
+    db.collection('routes').get(),
+  ]);
+  const ops = opsSnap.docs.map(docSnap => {
+    const o = docSnap.data();
+    return {
+      ...o,
+      id: docSnap.id,
+      revenue: Number(o.revenue) || 0, lat: Number(o.lat), lng: Number(o.lng),
+      pic: str(o.pic), picPhone: str(o.picPhone), picPosition: str(o.picPosition),
+      address: str(o.address), name: str(o.name), createdBy: str(o.createdBy),
+      industry: str(o.industry), gender: str(o.gender), email: str(o.email),
+      provinsi: str(o.provinsi), kota: str(o.kota), zipcode: str(o.zipcode), photoUrl: str(o.photoUrl),
+      momExisting: str(o.momExisting), momBandwidth: str(o.momBandwidth), momContract: str(o.momContract), momOthers: str(o.momOthers),
+      momBudget: Number(o.momBudget) || 0,
+      cams: Array.isArray(o.cams) ? o.cams : [],
+      activityLog: Array.isArray(o.activityLog) ? o.activityLog : [],
+    };
+  });
+  // Firestore tidak bisa nyimpen array-di-dalam-array, jadi titik rute disimpan sebagai
+  // {lat,lng}. Di sini diubah balik ke format [lat,lng] yang dipakai kode rendering peta.
+  const routes = routesSnap.docs.map(docSnap => {
+    const r = docSnap.data();
+    return {
+      ...r,
+      id: docSnap.id,
+      points: Array.isArray(r.points) ? r.points.map(p => [Number(p.lat), Number(p.lng)]) : [],
+    };
+  });
   return { opportunities: ops, routes };
 }
 async function apiAdd(op){
-  // Timeout dinaikkan jadi 40 detik (bukan default 20 detik) — action 'add' sering
-  // langsung disusul upload foto, dan kalau sinyal di lapangan lagi lemah, 20 detik
-  // suka kepotong duluan padahal sebenarnya cuma butuh waktu sedikit lebih lama.
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'add', op, username: currentUser.username})}, 40000);
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal menyimpan');
+  const { id, ...data } = op;
+  await db.collection('opportunities').doc(id).set({ ...data, createdAt: new Date().toISOString() });
 }
 async function apiUpdate(op){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'update', op, username: currentUser.username})});
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal update');
+  const { id, ...data } = op;
+  await db.collection('opportunities').doc(id).set(data, { merge: true });
 }
 async function apiDelete(id){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'delete', id, username: currentUser.username})});
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal hapus');
+  await db.collection('opportunities').doc(id).delete();
 }
 async function apiAddRoute(route){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addRoute', route, username: currentUser.username})});
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal menyimpan jalur');
+  const { id, points, ...data } = route;
+  const firestorePoints = points.map(p => ({ lat: Number(p[0]), lng: Number(p[1]) }));
+  await db.collection('routes').doc(id).set({ ...data, points: firestorePoints, createdAt: new Date().toISOString() });
 }
 async function apiDeleteRoute(id){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'deleteRoute', id, username: currentUser.username})});
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal hapus jalur');
+  await db.collection('routes').doc(id).delete();
 }
 async function apiUploadPhoto(id, base64){
   // Timeout dinaikkan jadi 60 detik — ini action paling berat (kirim payload foto +
   // DriveApp membuat file & setSharing, yang di Apps Script memang sering lambat
   // beberapa detik sendiri di luar waktu jaringan).
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg', username: currentUser.username})}, 60000);
+  const res = await fetchWithTimeout(AUTH_PHOTO_API_URL, {method:'POST', body: JSON.stringify({action:'uploadPhoto', id, imageBase64: base64, mimeType:'image/jpeg'})}, 60000);
   const json = await res.json();
   if (!json.ok) throw new Error(json.error || 'Gagal upload foto');
+  // URL foto dikembalikan ke kaller supaya disimpan ke Firestore (bukan Apps Script
+  // yang nyimpen, karena data opportunity sekarang bukan lagi di Google Sheets).
+  await db.collection('opportunities').doc(id).set({ photoUrl: json.url }, { merge: true });
   return json.url;
 }
 async function apiAddActivity(id, date, notes){
-  const res = await fetchWithTimeout(SHEET_API_URL, {method:'POST', body: JSON.stringify({action:'addActivity', id, date, notes, username: currentUser.username})});
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || 'Gagal menyimpan kunjungan');
-  return json;
+  const ref = db.collection('opportunities').doc(id);
+  const snap = await ref.get();
+  const current = snap.exists && Array.isArray(snap.data().activityLog) ? snap.data().activityLog : [];
+  const updated = [...current, { date, notes, by: currentUser.username }];
+  await ref.set({ activityLog: updated }, { merge: true });
+  return { ok: true, activityLog: updated };
 }
 
 // ============== MAP INIT (OpenStreetMap, tanpa API key) ==============
@@ -1819,7 +1846,7 @@ document.getElementById('f-save').addEventListener('click', async () => {
       opportunities.push(op);
       bindMarker(op);
       savedOpId = op.id;
-      showToast('Titik baru tersimpan ke Google Sheets.');
+      showToast('Titik baru tersimpan.');
     }
 
     if (selectedPhotoFile && savedOpId) {
@@ -2051,7 +2078,7 @@ async function loadAndRender(showLoadingToast){
 
     renderList(); applyFilters();
     renderRouteList(); applyRouteFilters();
-    setConnStatus('ok', 'Tersambung ke Google Sheets');
+    setConnStatus('ok', 'Tersambung ke Firestore');
     if (showLoadingToast) showToast('Data diperbarui.');
   } catch (err) {
     setConnStatus('err', 'Gagal tersambung');
