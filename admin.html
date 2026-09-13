@@ -49,6 +49,7 @@
       <option value="other">Cuma ID lainnya (existing/hotel list)</option>
     </select>
     <button id="btnReload" class="secondary">🔄 Muat Ulang</button>
+    <button id="btnAddRow" class="secondary">➕ Tambah Baris Baru</button>
     <button id="btnSave" disabled>💾 Simpan Semua Perubahan (<span id="dirtyCount">0</span>)</button>
     <span id="status"></span>
   </div>
@@ -278,8 +279,33 @@
       }
     }
 
+    function addNewRow() {
+      const newId = 'op_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+      const blank = {
+        name: '', tier: 'medium', industry: '', revenue: 0,
+        pic: '', picPosition: '', picPhone: '', email: '', gender: '',
+        address: '', provinsi: '', kota: '', zipcode: '',
+        momExisting: '', momBudget: 0, momBandwidth: '', momContract: '', momOthers: '',
+        cams: [], lat: 0, lng: 0, photoUrl: '',
+        createdBy: currentUserLabel(), activityLog: [],
+      };
+      rows.unshift({ id: newId, current: blank });
+      dirtyIds.add(newId);
+      document.getElementById('idFilter').value = 'all';
+      document.getElementById('search').value = '';
+      updateSaveButton();
+      renderRows('');
+      setStatus('Baris baru ditambahkan — isi datanya (terutama Lat & Lng, kalau kosong titik tidak akan muncul di peta) lalu klik Simpan.', 'ok');
+      document.querySelector('.table-wrap').scrollTop = 0;
+    }
+    function currentUserLabel() {
+      const name = prompt('Nama/username kamu (buat catatan siapa yang bikin titik ini)?', '');
+      return name ? name.toLowerCase().trim() : 'admin-tool';
+    }
+
     document.getElementById('search').addEventListener('input', (e) => renderRows(e.target.value));
     document.getElementById('idFilter').addEventListener('change', () => renderRows(document.getElementById('search').value));
+    document.getElementById('btnAddRow').addEventListener('click', addNewRow);
     document.getElementById('btnReload').addEventListener('click', () => {
       if (dirtyIds.size > 0 && !confirm('Ada perubahan belum disimpan, muat ulang tetap lanjut dan perubahan akan hilang?')) return;
       loadData();
