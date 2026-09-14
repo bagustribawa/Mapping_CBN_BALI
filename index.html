@@ -839,7 +839,7 @@ document.getElementById('mom-confirm').addEventListener('click', () => {
     fmtJam(op.createdAt),
     op.name,
     buildKeterangan(op),
-    op.pic || '-',
+    canEditOp(op) ? (op.pic || '-') : '🔒 Dirahasiakan',
     'Followup'
   ]);
 
@@ -918,9 +918,9 @@ document.getElementById('export-confirm').addEventListener('click', () => {
   const opRows = filteredOps.map((op, i) => ({
     'No': i + 1,
     'Nama Hotel/Villa': op.name,
-    'PIC': op.pic || '-',
-    'No HP PIC': op.picPhone || '-',
-    'Jabatan PIC': op.picPosition || '-',
+    'PIC': canEditOp(op) ? (op.pic || '-') : '🔒 Dirahasiakan',
+    'No HP PIC': canEditOp(op) ? (op.picPhone || '-') : '🔒 Dirahasiakan',
+    'Jabatan PIC': canEditOp(op) ? (op.picPosition || '-') : '🔒 Dirahasiakan',
     'Tier': tierMeta[op.tier] ? tierMeta[op.tier].label : op.tier,
     'Potensi Revenue (Rp)': Number(op.revenue) || 0,
     'CAM': (op.cams || []).join(', '),
@@ -943,13 +943,13 @@ document.getElementById('export-confirm').addEventListener('click', () => {
 
   // ---------- Sheet 1: Neo CRM Format (siap copy-paste ke Neo CRM) ----------
   const crmRows = filteredOps.map((op) => ({
-    'PIC Name': op.pic || '',
+    'PIC Name': canEditOp(op) ? (op.pic || '') : '🔒 Dirahasiakan',
     'Company Name': op.name || '',
     'Industry': op.industry || '',
-    'PIC Position': op.picPosition || '',
+    'PIC Position': canEditOp(op) ? (op.picPosition || '') : '🔒 Dirahasiakan',
     'Gender': op.gender || '',
-    'Mobile Number': op.picPhone || '',
-    'Email': op.email || '',
+    'Mobile Number': canEditOp(op) ? (op.picPhone || '') : '🔒 Dirahasiakan',
+    'Email': canEditOp(op) ? (op.email || '') : '🔒 Dirahasiakan',
     'Tier': tierMeta[op.tier] ? tierMeta[op.tier].label : op.tier,
     'Longitude Latitude': `${op.lng}, ${op.lat}`,
     'Provinsi': op.provinsi || '',
@@ -1312,12 +1312,14 @@ function popupHtml(op){
   const industryRow = op.industry ? `<div class="popup-row">🏷 ${op.industry}</div>` : '';
   const isOwnerOrAdmin = canEditOp(op);
   const hasPic = op.pic || op.picPhone || op.picPosition;
-  const picBox = hasPic ? `
+  const picBox = !isOwnerOrAdmin
+    ? `<div class="popup-pic-box"><div class="popup-row" style="margin:0;color:var(--muted);">🔒 Kontak PIC dirahasiakan — hanya terlihat oleh pembuat titik & Administrator</div></div>`
+    : (hasPic ? `
     <div class="popup-pic-box">
       <div class="popup-row" style="margin:0;"><b>${op.pic || '(nama PIC belum diisi)'}</b>${op.picPosition ? ' — ' + op.picPosition : ''}${op.gender ? ' (' + op.gender + ')' : ''}</div>
       ${op.picPhone ? `<div class="popup-row" style="margin:2px 0 0;">📞 <a href="tel:${String(op.picPhone).replace(/\s/g,'')}">${op.picPhone}</a></div>` : ''}
       ${op.email ? `<div class="popup-row" style="margin:2px 0 0;">✉️ <a href="mailto:${op.email}">${op.email}</a></div>` : ''}
-    </div>` : (!isOwnerOrAdmin ? `<div class="popup-pic-box"><div class="popup-row" style="margin:0;color:var(--muted);">🔒 Kontak PIC dirahasiakan — hanya terlihat oleh pembuat titik & Administrator</div></div>` : '');
+    </div>` : '');
   const photoRow = op.photoUrl ? `<div class="popup-row"><a href="${op.photoUrl}" target="_blank" style="color:var(--accent);">📷 Lihat Foto Evidence</a></div>` : '';
   const hasMom = op.momExisting || op.momBudget || op.momBandwidth || op.momContract || op.momOthers;
   const momRow = hasMom ? `
@@ -1332,12 +1334,11 @@ function popupHtml(op){
   const creatorRow = op.createdBy ? `<div class="popup-row" style="color:var(--muted);">🖊 Dibuat oleh: ${getDisplayName(op.createdBy)}</div>` : '';
   const editBtn = canEditOp(op) ? `<button class="btn-edit" data-edit="${op.id}">✎ Edit</button>` : '';
   const activityBtn = canEditOp(op) ? `<button class="btn-edit" data-activity="${op.id}">🕒 Update Kunjungan</button>` : '';
-  const proposalBtn = `<button class="btn-edit" data-proposal="${op.id}">📄 Buat Proposal</button>`;
+  const proposalBtn = canEditOp(op) ? `<button class="btn-edit" data-proposal="${op.id}">📄 Buat Proposal</button>` : '';
   const deleteBtn = isAdmin() ? `<button class="btn-delete" data-del="${op.id}">🗑 Hapus</button>` : '';
   const noPermRow = (!editBtn && !deleteBtn) ? `<div class="popup-row" style="color:var(--muted);font-style:italic;">Hanya pembuat titik ini atau Administrator yang bisa mengubahnya.</div>` : '';
 
-  let activities = [];
-  try { activities = op.activityLog ? JSON.parse(op.activityLog) : []; } catch(e) { activities = []; }
+  let activities = Array.isArray(op.activityLog) ? op.activityLog : [];
   const activityRows = activities.length ? `
     <div class="popup-pic-box">
       <div class="popup-row" style="margin:0;font-weight:700;color:var(--text);">🕒 Riwayat Kunjungan</div>
@@ -1999,7 +2000,7 @@ function renderListModal(){
           <span class="item-name">${op.name}</span>
         </div>
         <div class="item-revenue">${fmtRupiah(op.revenue)}</div>
-        ${op.pic ? `<div class="item-pic">👤 ${op.pic}${op.picPosition ? ' ('+op.picPosition+')' : ''}</div>` : ''}
+        ${canEditOp(op) && op.pic ? `<div class="item-pic">👤 ${op.pic}${op.picPosition ? ' ('+op.picPosition+')' : ''}</div>` : ''}
         <div class="item-cams">${op.cams.length ? op.cams.join(', ') : 'Belum ada CAM'}</div>
       </div>
     `;
