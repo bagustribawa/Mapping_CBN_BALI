@@ -542,6 +542,12 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+// Simpan cache data di browser (IndexedDB) supaya buka-tutup web berkali-kali di HP
+// yang sama TIDAK baca ulang semua data dari server — cuma sinkron yang berubah saja.
+// synchronizeTabs:true supaya tetap jalan normal kalau CAM buka 2 tab sekaligus.
+db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+  console.warn('Firestore offline persistence tidak aktif:', err.code);
+});
 
 // ============== USER & ROLE ==============
 // Password TIDAK disimpan di sini — dicek server-side lewat sheet "password"
