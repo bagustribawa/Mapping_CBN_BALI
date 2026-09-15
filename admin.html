@@ -207,12 +207,19 @@
         });
 
         const tdPhoto = document.createElement('td');
+        const photoInput = document.createElement('input');
+        photoInput.className = 'cell';
+        photoInput.type = 'text';
+        photoInput.placeholder = 'Paste link foto...';
+        photoInput.value = row.current.photoUrl || '';
+        photoInput.style.minWidth = '160px';
+        photoInput.addEventListener('change', () => onCellChange(row, 'photoUrl', photoInput.value.trim()));
+        tdPhoto.appendChild(photoInput);
         if (row.current.photoUrl) {
           const a = document.createElement('a');
           a.href = row.current.photoUrl; a.target = '_blank'; a.className = 'photo-link'; a.textContent = 'Lihat';
+          a.style.display = 'inline-block'; a.style.marginTop = '2px';
           tdPhoto.appendChild(a);
-        } else {
-          tdPhoto.textContent = '-';
         }
         tr.appendChild(tdPhoto);
 
