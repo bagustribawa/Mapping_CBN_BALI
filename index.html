@@ -1778,11 +1778,82 @@ function closeForm(){
   editingId = null;
   pendingLatLng = null;
   selectedPhotoFile = null;
+  clearDraft();
 }
 document.getElementById('f-cancel').addEventListener('click', closeForm);
 
+// ============== DRAFT OTOMATIS (antisipasi HP force-close/reload pas buka kamera) ==============
+// Beberapa HP (terutama Xiaomi/MIUI) suka mematikan tab browser buat hemat RAM
+// begitu app kamera dibuka, lalu reload halaman waktu balik — semua yang sudah
+// diketik di form hilang. Draft ini disimpan ke localStorage tepat sebelum kamera
+// dibuka, dan ditawarkan untuk dipulihkan kalau halaman ke-reload di tengah jalan.
+const DRAFT_KEY = 'campos_form_draft_v1';
+
+function saveDraftNow(){
+  if (document.getElementById('form-overlay').style.display !== 'flex') return;
+  const draft = {
+    editingId, pendingLatLng, selectedTier, selectedPhotoFile,
+    savedAt: Date.now(),
+    fields: {
+      name: document.getElementById('f-name').value,
+      pic: document.getElementById('f-pic').value,
+      picPhone: document.getElementById('f-pic-phone').value,
+      picPosition: document.getElementById('f-pic-position').value,
+      gender: document.getElementById('f-gender').value,
+      email: document.getElementById('f-email').value,
+      industry: document.getElementById('f-industry').value,
+      revenue: document.getElementById('f-revenue').value,
+      address: document.getElementById('f-address').value,
+      provinsi: document.getElementById('f-provinsi').value,
+      kota: document.getElementById('f-kota').value,
+      zipcode: document.getElementById('f-zipcode').value,
+      momExisting: document.getElementById('f-mom-existing').value,
+      momBudget: document.getElementById('f-mom-budget').value,
+      momBandwidth: document.getElementById('f-mom-bandwidth').value,
+      momContract: document.getElementById('f-mom-contract').value,
+      momOthers: document.getElementById('f-mom-others').value,
+    }
+  };
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) { /* penuh/gagal, abaikan */ }
+}
+function clearDraft(){
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+}
+function tryRestoreDraft(){
+  let raw;
+  try { raw = localStorage.getItem(DRAFT_KEY); } catch (e) { return; }
+  if (!raw) return;
+  let draft;
+  try { draft = JSON.parse(raw); } catch (e) { clearDraft(); return; }
+  // Draft lebih dari 6 jam dianggap basi, tidak usah ditawarkan lagi.
+  if (!draft.savedAt || (Date.now() - draft.savedAt) > 6 * 60 * 60 * 1000) { clearDraft(); return; }
+  if (!confirm('Ada isian titik yang belum sempat disimpan (kemungkinan HP restart/reload waktu buka kamera). Mau dilanjutkan?')) {
+    clearDraft();
+    return;
+  }
+  const existingOp = draft.editingId ? opportunities.find(o => o.id === draft.editingId) : null;
+  pendingLatLng = draft.pendingLatLng;
+  openForm(existingOp || null);
+  Object.entries(draft.fields).forEach(([key, val]) => {
+    const idMap = { name:'f-name', pic:'f-pic', picPhone:'f-pic-phone', picPosition:'f-pic-position', gender:'f-gender', email:'f-email', industry:'f-industry', revenue:'f-revenue', address:'f-address', provinsi:'f-provinsi', kota:'f-kota', zipcode:'f-zipcode', momExisting:'f-mom-existing', momBudget:'f-mom-budget', momBandwidth:'f-mom-bandwidth', momContract:'f-mom-contract', momOthers:'f-mom-others' };
+    const el = document.getElementById(idMap[key]);
+    if (el) el.value = val;
+  });
+  if (draft.selectedTier) selectTier(draft.selectedTier);
+  if (draft.selectedPhotoFile) {
+    selectedPhotoFile = draft.selectedPhotoFile;
+    document.getElementById('f-photo-preview').innerHTML = `<img src="data:image/jpeg;base64,${draft.selectedPhotoFile}" style="max-width:100%;border-radius:8px;border:1px solid var(--border);">`;
+    showToast('Foto yang sudah diambil sebelumnya berhasil dipulihkan.');
+  }
+}
+
 // Kompres & preview foto sebelum diupload (biar hemat kuota & cepat, dan
 // lebih tahan sinyal lemah di lapangan — target ukuran akhir di bawah ~350KB)
+document.getElementById('f-photo').addEventListener('click', () => {
+  // Disimpan TEPAT SEBELUM kamera dibuka, karena momen inilah HP paling
+  // rawan mematikan tab untuk hemat RAM.
+  saveDraftNow();
+});
 document.getElementById('f-photo').addEventListener('change', (e) => {
   const file = e.target.files[0];
   const previewEl = document.getElementById('f-photo-preview');
@@ -1813,6 +1884,7 @@ document.getElementById('f-photo').addEventListener('change', (e) => {
 
       selectedPhotoFile = dataUrl.split(',')[1]; // base64 murni tanpa prefix
       previewEl.innerHTML = `<img src="${dataUrl}" style="max-width:100%;border-radius:8px;border:1px solid var(--border);">`;
+      saveDraftNow(); // simpan lagi sekarang fotonya sudah ada, jaga-jaga crash berikutnya
     };
     img.src = ev.target.result;
   };
@@ -2109,6 +2181,7 @@ function renderRouteList(){
 let unsubOpportunities = null;
 let unsubRoutes = null;
 let opsSyncReady = false, routesSyncReady = false;
+let draftCheckDone = false;
 
 function rerenderFromState(){
   Object.values(markerIndex).forEach(m => map.removeLayer(m));
@@ -2133,6 +2206,7 @@ function startRealtimeSync(){
     if (!opsSyncReady || !routesSyncReady) return; // tunggu keduanya siap biar tidak render setengah data
     rerenderFromState();
     setConnStatus('ok', 'Tersambung ke Firestore (real-time)');
+    if (!draftCheckDone) { draftCheckDone = true; tryRestoreDraft(); }
   };
 
   unsubOpportunities = db.collection('opportunities').onSnapshot((snap) => {
