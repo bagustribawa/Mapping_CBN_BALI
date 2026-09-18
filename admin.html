@@ -6,6 +6,7 @@
 <title>Admin — Edit Data Opportunity</title>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   * { box-sizing: border-box; }
   body { font-family: system-ui, sans-serif; background:#0f1420; color:#e5e7eb; margin:0; padding:16px; }
@@ -50,6 +51,9 @@
     </select>
     <button id="btnReload" class="secondary">🔄 Muat Ulang</button>
     <button id="btnAddRow" class="secondary">➕ Tambah Baris Baru</button>
+    <button id="btnTemplate" class="secondary">📄 Download Template Excel</button>
+    <button id="btnImportExcel" class="secondary">📥 Import dari Excel</button>
+    <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;">
     <button id="btnSave" disabled>💾 Simpan Semua Perubahan (<span id="dirtyCount">0</span>)</button>
     <span id="status"></span>
   </div>
@@ -309,6 +313,80 @@
       const name = prompt('Nama/username kamu (buat catatan siapa yang bikin titik ini)?', '');
       return name ? name.toLowerCase().trim() : 'admin-tool';
     }
+
+    // ---------- TEMPLATE & IMPORT EXCEL ----------
+    // Kolom ID bersifat opsional: kalau diisi dan cocok dengan ID yang sudah
+    // ada, baris itu akan MENIMPA (update) data lama. Kalau kosong atau tidak
+    // cocok, dianggap titik baru dan dibuatkan ID otomatis.
+    const EXCEL_HEADERS = ['ID (kosongkan kalau titik baru)', ...EDITABLE_COLUMNS.map(c => c.label), 'Foto (URL)'];
+
+    function downloadTemplate() {
+      const wb = XLSX.utils.book_new();
+      const sampleRow = {};
+      EXCEL_HEADERS.forEach(h => sampleRow[h] = '');
+      const ws = XLSX.utils.json_to_sheet([sampleRow]);
+      XLSX.utils.book_append_sheet(wb, ws, 'Import Opportunity');
+      XLSX.writeFile(wb, 'Template_Import_Opportunity.xlsx');
+    }
+
+    function importExcelFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          if (!data.length) { alert('File Excel kosong atau formatnya tidak terbaca.'); return; }
+
+          let added = 0, updated = 0;
+          const importerLabel = currentUserLabel();
+          data.forEach(excelRow => {
+            const rawId = String(excelRow['ID (kosongkan kalau titik baru)'] || '').trim();
+            const existing = rawId ? rows.find(r => r.id === rawId) : null;
+            const id = existing ? existing.id : ('op_' + Date.now() + '_' + Math.floor(Math.random() * 100000));
+
+            const current = existing ? { ...existing.current } : {
+              cams: [], activityLog: [], photoUrl: '', createdBy: importerLabel,
+            };
+            EDITABLE_COLUMNS.forEach(col => {
+              const raw = excelRow[col.label];
+              if (raw === undefined || raw === '') { if (!existing) current[col.key] = col.type === 'number' ? 0 : (col.type === 'array' ? [] : ''); return; }
+              if (col.type === 'number') current[col.key] = Number(raw) || 0;
+              else if (col.type === 'array') current[col.key] = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+              else current[col.key] = String(raw);
+            });
+            const photoRaw = excelRow['Foto (URL)'];
+            if (photoRaw) current.photoUrl = String(photoRaw).trim();
+
+            if (existing) {
+              existing.current = current;
+              updated++;
+            } else {
+              rows.unshift({ id, current });
+              added++;
+            }
+            dirtyIds.add(id);
+          });
+
+          document.getElementById('idFilter').value = 'all';
+          document.getElementById('search').value = '';
+          updateSaveButton();
+          renderRows('');
+          setStatus(`Import selesai: ${added} baris baru, ${updated} baris di-update. Cek dulu datanya, lalu klik Simpan Semua Perubahan.`, 'ok');
+        } catch (err) {
+          alert('Gagal membaca file Excel: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    document.getElementById('btnTemplate').addEventListener('click', downloadTemplate);
+    document.getElementById('btnImportExcel').addEventListener('click', () => document.getElementById('fileExcel').click());
+    document.getElementById('fileExcel').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) importExcelFile(file);
+      e.target.value = '';
+    });
 
     document.getElementById('search').addEventListener('input', (e) => renderRows(e.target.value));
     document.getElementById('idFilter').addEventListener('change', () => renderRows(document.getElementById('search').value));
